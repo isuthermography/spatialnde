@@ -1,0 +1,5 @@
+demos/sc6000_1009_calib.cic
+*~
+*.pyc
+__pycache__
+build

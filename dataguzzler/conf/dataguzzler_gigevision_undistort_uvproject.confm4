@@ -1,0 +1,98 @@
+# dataguzzler_gigevision_undistort_uvproject.confm4 usage: 
+#     dataguzzler dataguzzler_gigevision.confm4 ETH=<InterfaceIP> OBJ=<SPECIMEN_ID_WITH_DASHES_TO_UNDERSCORES>
+# e.g. dataguzzler dataguzzler_gigevision.confm4 ETH=192.168.23.4 OBJ=CR03_SPAR_01H
+
+# or
+#     dataguzzler dataguzzler_gigevision.confm4 ETH=
+#     (for link-local auto-probe)
+#    Dataguzzler: A Platform for High Performance Laboratory Data Acquisition 
+#    Copyright (C) 2005-2006 Iowa State University
+#
+
+# INSTRUCTIONS:
+#  1. Load specimen UV-parameterized and landmarked X3D model
+#  2. Mark visible landmarks with LANDMARK <name> <coords>
+#     (you can use the middle mouse button to paste the
+#      most recently measured coords from the scope)
+#     on GEVUnprojected channel.
+#  3. View GEV_<OBJ>_tex channel and projected ProjGEV_<OBJ> channel
+#  4. Issue "GRAB" command to grab a frame
+#  5. View Accum_GEV_<OBJ>_tex to see accumulated frame
+#  6. Reorient specimen
+#  7. Clear landmarks: LANDMARK CLEARALL
+#  8. Loop back to step 2
+
+m4_include(`m4/stddef.confhm4')
+
+#m4_define([[CAMERACALIB]],[['/dataawareness/Camera_Calibration_files/SpatialCalibration_GEV0828_20150614.cic']])
+m4_define([[CAMERACALIB]],[['/dataawareness/Camera_Calibration_files/Calib_0828_201706012/Calib_0828_20170612.cic']])
+m4_define([[IMGCHANPREFIX]],[[GEV]])
+
+
+m4_include([[m4/stdlib.confhm4]])
+m4_include([[m4/dg_python_pygram.confhm4]])
+
+# additional parameters for dg_python (also configured above)
+library "libraries/dg_python.so" {
+  
+  landmarks_mathchan="GEVUnprojected_NPL"
+  fiducials_mathchan="GEVUnprojected_NPL"
+}
+
+m4_include([[m4/stdmod.confhm4]])
+
+module math("modules/wfmmath.so") {  
+  numthreads = 2 # -1 would mean use number of CPU's + 1 
+  debugmode=true
+ 
+  pymath {
+    # Support Python-based math functions
+    m4_include([[m4/stdinit.pymathm4]])
+    m4_include([[m4/stdfunc.pymathm4]])
+  
+    m4_include([[m4/undistort_intrinsic.pymathm4]])
+    m4_include([[m4/uv_projection.pymathm4]])
+
+    m4_include([[m4/x3d_vrml_textureprefix.pymathm4]])
+
+    # (can add custom math functions here)
+  }
+}
+
+# Need to modify to accommodate visible
+m4_include([[m4/accum_projection_mathchans.confhm4]])
+
+m4_include([[m4/specimenorientation.confhm4]])
+
+module icapt("modules/gevcapture.so") {
+	# device parameters
+
+	# Framebuffer parameters
+        FBElementSize=100000
+        FBNumElements=500
+
+	# RequestPktSize=4000
+	InterfaceIP="ETH"
+
+	# Set pixel format to 8-bit mono
+	GenICam(PixelFormat,IString)="Mono8"
+
+	# Set pixel format to 16-bit bayer
+	#GenICam(PixelFormat,IString)="BayerGR16"
+
+	# Ability to set/query VideoMode for point grey cameras
+	GenICamCommand(VIDEOMODE,VideoMode,IString)
+
+        channelname="GEVDistortedUnprojected" # Name of the dataguzzler channel
+
+	calcsync=true # don't allow new acquisitions until previous done processing
+	discardtopline=false
+	flipimg=false
+
+}
+
+
+
+
+m4_include([[m4/fiducials.confhm4]])
+m4_include([[m4/landmarks.confhm4]])

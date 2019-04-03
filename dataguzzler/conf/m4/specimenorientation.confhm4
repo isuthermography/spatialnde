@@ -1,0 +1,89 @@
+
+# Specimenorientation takes 16 elements of a pose matrix
+# in Fortran order 
+module specimenorientation("modules/pyscript.so") {
+  {
+    import sys
+    import dg_python
+    import pygram
+    import numpy as np
+    import dg_metadata as dgm
+    import dataguzzler as dg
+    from dg_comm import upload_escapestr
+
+    def get_dtype():
+      # Determine single or double precision?
+      realsz=dg_python.rpc_parse("WFM:REALSZ?","\"WFM:REALSZ\",decinteger:sz =sz");
+      if (realsz==4):
+          dtype='f'
+          pass
+      elif (realsz==8):
+          dtype='d'
+          pass
+      else:
+          raise ValueError("Invalid real number size: must be 4 or 8")
+	  
+      return dtype
+
+    def specimenorientation_query():
+      #if not dg_python.rpc_async("math:def? [[Pose_]]OBJ").startswith("MATH:ERROR_CHANNEL_NOT_FOUND"):
+      #  sys.stderr.write("MATHCHAN")
+      #  pass
+      try: 
+        wfmrev=dg_python.rpc_parse("WFM:REVISIONLOCK? [[Pose_]]OBJ","\"WFM:REVISIONLOCK\",identifier:wfmname,decinteger:rev =rev");
+        (dimlen,bindat)=dg_python.rpc_parse("WFM:DATA? [[Pose_]]OBJ %d" % (wfmrev),"\"WFM:DATA\",\"[[Pose_]]OBJ\",decinteger:rev, metadata:md, decinteger:ndim, datalen:dimlen,binary_wfm_data:bindat =(dimlen,bindat)")
+        dg_python.rpc_async("WFM:UNLOCK? [[POSE_]]OBJ %d" % (wfmrev))
+      except dg_python.dg_python_pygram_rpc_parse_error:
+        # Error response from query... must not be set correctly
+        sys.stdout.write("%s INVALID" % (pys_modname))
+        #raise   # comment this out when done debugging
+        pass
+      wfmdat = np.fromstring(bindat,dtype=get_dtype()).reshape(dimlen,order='F')
+
+      if len(wfmdat.shape) != 2 or wfmdat.shape[0] != 4 or wfmdat.shape[1] !=4:
+        raise ValueError("Invalid pose matrix size: %s" % (str(wfmdat.shape)))
+
+      # print out 4x4 matrix representation
+      sys.stdout.write("%s %s" % (pys_modname," ".join([repr(val) for val in wfmdat.ravel(order='F')])))
+      pass
+      
+  }
+
+  {
+  try:
+    pygram.parse(r"""
+      command $
+        -> "SET\\?"   =specimenorientation_query()
+        -> "\\?"         =specimenorientation_query()
+        -> "SET"
+        -> ws, real_number:p11, real_number:p12,real_number:p13, real_number:p14,real_number:p21, real_number:p22,real_number:p23, real_number:p24,real_number:p31, real_number:p32,real_number:p33, real_number:p34,real_number:p41, real_number:p42,real_number:p43, real_number:p44      =:
+          # Remove solve_pnp_landmarks math function, if present
+
+          dtype=get_dtype()
+          dg_python.rpc_async("math:undef [[Pose_]]OBJ")
+
+          posemtx=np.array(((p11,p12,p13,p14),
+	                    (p21,p22,p23,p24),
+                            (p31,p32,p33,p34),
+                            (p41,p42,p43,p44)),dtype=dtype).T
+
+          databuf=posemtx.tostring(order='F')
+
+	  dg_python.rpc_async(bytes("wfm:data [[Pose_]]OBJ 0 { } 2 [4][4] "+upload_escapestr(databuf)+"\n"))
+
+	  specimenorientation_query()          
+      """,cmd,globals(),globals(),preparsed=dg_python.pygram_boilerplate)
+  except (pygram.pyg_syntaxerror):
+    retcode=500
+    sys.stdout.write(pys_modname+" INVALID "+dg.escapestr(str(sys.exc_info()[1])));
+  except (pygram.pyg_reductionexception):
+    sys.stderr.write(str(sys.exc_info()[1])+"\n")
+    sys.stdout.write(pys_modname+" INVALID")
+    pass
+
+
+  }
+
+
+}
+

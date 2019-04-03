@@ -1,0 +1,115 @@
+#! /usr/bin/python
+
+import sys
+import os
+import getpass
+
+try:
+    # py2.x
+    from urllib import pathname2url
+    from urllib import url2pathname
+    from urllib import quote
+    from urllib import unquote
+    pass
+except ImportError:
+    # py3.x
+    from urllib.request import pathname2url
+    from urllib.request import url2pathname
+    from urllib.parse import quote
+    from urllib.parse import unquote
+    pass
+
+import pylab as pl
+import numpy as np
+
+import cv2
+
+from limatix import lm_units
+lm_units.units_config("insert_basic_units")
+
+from limatix import xmldoc
+from limatix import dc_value
+
+
+
+from spatialnde import intrinsic_calibration
+from spatialnde import calibration_image
+
+
+
+calibration_source_file='/databrowse/TRI_FlashThermography/TRI_specimen04_files/TRI_specimen04_flashcalibration.dgs'
+calibration_dest_file='/tmp/sc6000calib_'+getpass.getuser()+'.cic'
+calibration_channel_name="DiffStack"
+calibration_frame_number=14
+#calibration_offset=4.5
+calibration_offset=4.3
+#calibration_units_per_intensity=2.0
+calibration_units_per_intensity=2.0
+calibration_invert=False
+calibration_cvflags=0
+calibration_pattern_type="symmetric_circles"
+#calibration_pattern_num_x=13
+#calibration_pattern_num_y=10
+calibration_pattern_num_x=8 #... we should be able to do better than this
+calibration_pattern_num_y=4
+calibration_pattern_spacing=dc_value.numericunitsvalue(25.4,"mm")
+
+
+if os.path.isabs(calibration_source_file):
+   calibration_href=dc_value.hrefvalue(pathname2url(calibration_source_file))
+   pass
+else:
+   calibration_href=dc_value.hrefvalue(pathname2url(calibration_source_file))
+   pass
+
+params=calibration_image.calibration_image_params(calibration_href,
+                                                  calibration_channel_name,
+                                                  calibration_frame_number,
+                                                  calibration_offset,
+                                                  calibration_units_per_intensity,
+                                                  calibration_invert,
+                                                  calibration_cvflags,
+                                                  calibration_pattern_type,
+                                                  calibration_pattern_num_x,
+                                                  calibration_pattern_num_y,
+                                                  calibration_pattern_spacing)
+
+calibimg=calibration_image.calibration_image(params)
+# if we couldn't evaluate, object_points and image_points will be None
+
+pl.figure(1)
+pl.clf()
+pl.imshow(calibimg.uint_image,vmin=0,vmax=255)
+if calibimg.image_points is not None:
+   pl.plot(calibimg.image_points[:,0,0],calibimg.image_points[:,0,1],'o',markersize=10)
+   pass
+else: 
+   raise ValueError("Did not successfully find requested image points")
+
+nx=calibimg.numpy_image.shape[1]
+ny=calibimg.numpy_image.shape[0]
+
+# print(calibimg.numpy_image)
+calib=intrinsic_calibration.intrinsic_calibration([calibimg],nx,ny)
+
+# Apply calibration to calibration image
+processor=intrinsic_calibration.undistortion_processor(calib,nx,ny,int(nx*1.2),int(ny*1.2),cv2.INTER_LINEAR,1.0)
+
+undistorted_calib_image=processor.undistort_numpy_image(calibimg.numpy_image)
+
+pl.figure(2)
+pl.clf()
+pl.imshow(undistorted_calib_image)
+if calibimg.image_points is not None:
+   # Plotting the undistorted image points doesn't work yet (?)
+
+   xidxs=np.uint32(np.round(calibimg.image_points[:,0,0]))
+   yidxs=np.uint32(np.round(calibimg.image_points[:,0,1]))
+   pl.plot(processor.mapx[xidxs,yidxs,0],processor.mapx[xidxs,yidxs,1],'o',markersize=10)
+   pass
+
+calib.savetofile(calibration_dest_file)
+
+pl.show()
+
+

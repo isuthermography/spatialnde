@@ -1,0 +1,65 @@
+# This defines a series of math channels related
+# to object OBJ (specimen id with dashes changed to underscores)
+# which defines the various projection and stack channels
+# so as to support accumulating data from multiple orientations
+# in a single coherent parameterization
+
+# m4 symbols to define: 
+# IMGCHANPREFIX: Name of input image channel/channel prefix
+
+
+main {
+
+  initcommand="math:def IMGCHANPREFIX[[Unprojected_NPL]]=undistort_intrinsic.undistort_intrinsic(IMGCHANPREFIX[[DistortedUnprojected]],CAMERACALIB,1.2)"
+
+  initcommand="math:def [[Pose_]]OBJ[[=]]uv_projection.solve_pnp_landmarks(IMGCHANPREFIX[[Unprojected_NPL]],OBJ[[_tex]],OBJ,CAMERACALIB)"  # will be overridden once SPECIMENORIENTATION is specified
+  initcommand="math:def IMGCHANPREFIX[[Unprojected]]=uv_projection.image_with_projected_landmarks(IMGCHANPREFIX[[Unprojected_NPL]],[[Pose_]]OBJ)"
+
+  initcommand="math:def IMGCHANPREFIX=uv_projection.accumulable_uv_projection(IMGCHANPREFIX[[Unprojected_NPL]],OBJ[[_tex]],[[Pose_]]OBJ,OBJ,CAMERACALIB)"
+  initcommand="math:def IMGCHANPREFIX[[_]]OBJ[[_tex]]=uv_projection.image_from_accumulable(IMGCHANPREFIX)"
+
+
+  initcommand="math:def [[Proj]]IMGCHANPREFIX[[_]]OBJ=x3d_vrml_textureprefix.textureprefix(IMGCHANPREFIX[[_]]OBJ[[_tex]],OBJ,'IMGCHANPREFIX[[_]]')"
+
+  # Note: Copy IMGCHANPREFIX to IMGCHANPREFIX_GRAB when you want to capture a shot (see below)
+
+  initcommand="math:def [[Accum]]IMGCHANPREFIX[[_]]OBJ[[_accumtex=]]uv_projection.accum_uv_projection([[Accum]]IMGCHANPREFIX[[_]]OBJ[[_accumtex]],IMGCHANPREFIX[[_GRAB]])"   # accumulate data from multiple shots
+
+  initcommand="math:def [[Accum]]IMGCHANPREFIX[[_]]OBJ[[_tex=]]uv_projection.image_from_accumulable([[Accum]]IMGCHANPREFIX[[_]]OBJ[[_accumtex]])"
+
+
+  initcommand="math:def [[ProjAccum]]IMGCHANPREFIX[[_]]OBJ[[=]]x3d_vrml_textureprefix.textureprefix([[Accum]]IMGCHANPREFIX[[_]]OBJ[[_tex]],OBJ,'[[Accum]]IMGCHANPREFIX[[_]]')"
+
+
+}
+
+
+module grab("modules/pyscript.so") {
+  {
+
+  import sys
+  import pygram
+  import dg_python
+  import traceback
+
+  }
+  {
+  try:
+    pygram.parse(r"""
+      command $
+        -> "SET\\?"
+        -> "SET"  
+        -> "\\?"
+        -> =:
+          dg_python.rpc_async("WFM:COPY IMGCHANPREFIX IMGCHANPREFIX[[_GRAB]]")
+          sys.stdout.write(pys_modname);
+          pass
+      """,cmd,globals(),globals(),preparsed=dg_python.pygram_boilerplate)
+  except (pygram.pyg_syntaxerror):
+    retcode=500
+    traceback.print_exc()
+    sys.stdout.write(pys_modname+" INVALID");
+    pass
+  }
+}
+

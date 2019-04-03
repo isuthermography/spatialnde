@@ -1,0 +1,70 @@
+diff -urN io_scene_x3d.orig/export_x3d.py io_scene_x3d/export_x3d.py
+--- io_scene_x3d.orig/export_x3d.py	2017-05-09 16:58:27.000000000 -0500
++++ io_scene_x3d/export_x3d.py	2017-06-21 16:21:41.713805634 -0500
+@@ -226,6 +226,7 @@
+            use_h3d=False,
+            path_mode='AUTO',
+            name_decorations=True,
++           texcoord_precision=6,
+            ):
+ 
+     # -------------------------------------------------------------------------
+@@ -810,7 +811,7 @@
+                         if is_uv:
+                             fw('%s<TextureCoordinate point="' % ident)
+                             for x3d_v in vert_tri_list:
+-                                fw('%.4f %.4f ' % x3d_v[0][slot_uv])
++                                fw('%.*f %.*f ' % (texcoord_precision,x3d_v[0][slot_uv][0],texcoord_precision,x3d_v[0][slot_uv][1]))
+                             fw('" />\n')
+ 
+                         if is_col:
+@@ -928,7 +929,7 @@
+                             fw('%s<TextureCoordinate point="' % ident)
+                             for i in face_group:
+                                 for uv in mesh_faces_uv[i].uv:
+-                                    fw('%.4f %.4f ' % uv[:])
++                                    fw('%.*f %.*f ' % (texcoord_precision,uv[0],texcoord_precision,uv[1]))
+                             del mesh_faces_uv
+                             fw('" />\n')
+ 
+@@ -1588,7 +1589,8 @@
+          use_h3d=False,
+          global_matrix=None,
+          path_mode='AUTO',
+-         name_decorations=True
++         name_decorations=True,
++         texcoord_precision=6
+          ):
+ 
+     bpy.path.ensure_ext(filepath, '.x3dz' if use_compress else '.x3d')
+@@ -1615,6 +1617,7 @@
+            use_h3d=use_h3d,
+            path_mode=path_mode,
+            name_decorations=name_decorations,
++           texcoord_precision=texcoord_precision
+            )
+ 
+     return {'FINISHED'}
+diff -urN io_scene_x3d.orig/__init__.py io_scene_x3d/__init__.py
+--- io_scene_x3d.orig/__init__.py	2017-05-09 16:58:27.000000000 -0500
++++ io_scene_x3d/__init__.py	2017-06-21 16:14:28.618811623 -0500
+@@ -43,6 +43,7 @@
+         BoolProperty,
+         EnumProperty,
+         FloatProperty,
++        IntProperty,
+         StringProperty,
+         )
+ from bpy_extras.io_utils import (
+@@ -137,6 +138,11 @@
+             min=0.01, max=1000.0,
+             default=1.0,
+             )
++    texcoord_precision = IntProperty(
++            name="Texture coordinate precision",
++            min=1, max=12,
++            default=6,
++            )
+ 
+     path_mode = path_reference_mode
+ 

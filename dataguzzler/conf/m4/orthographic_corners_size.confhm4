@@ -1,0 +1,82 @@
+# This defines the MINX_MINY, etc. macros for orthographic correction
+
+
+# Create a m4 macro that, when instantiated four times will
+# create four macros, MINX_MINY, MINX_MAXY, MAXX_MAXY, and MAXX_MINY
+# to be used to specifiy four corners of the flat object
+# Also instantiated as XYSIZE_MM to store XYSIZE_MM_X and XYSIZE_MM_Y, 
+# the size (in mm) of the 2D rectangular object we are trying to look at
+# Also instantiated as PIXELSIZE_MM to store PIXELSIZE_MM_X and PIXELSIZE_MM_Y, 
+# the size (in mm) to make each pixel in the orthographically corrected
+# transformation
+#
+# The module has one argument, the string for its name, e.g. MINX_MAXY
+# This argument is referred to in the module definition as $1
+# 
+# It sets metadata entries for the ICAPT module with names $1_X
+# and $1_Y (e.g. MINX_MAXY_X and MINX_MAXY_Y)
+
+# these are based on roicorner.confhm4
+m4_define([[orthographiccornermetadatamoduletemplate]],[[
+module $1("modules/pyscript.so") {
+  {
+    import re
+    import sys
+    import pygram
+    import dg_python
+
+    if not dg_python.findmodule("ICAPT"):
+      disabled=True;
+      pass
+
+    def do_query():
+    
+      try :
+        x=dg_python.rpc_parse("MATH:GETMETADATUM?(IMGCHANPREFIX[[Uncorrected]]) $1_X","\"MATH:GETMETADATUM\",identifier,\"STATICMETADATUM\",real_number:r =r");
+        y=dg_python.rpc_parse("MATH:GETMETADATUM?(IMGCHANPREFIX[[Uncorrected]]) $1_Y","\"MATH:GETMETADATUM\",identifier,\"STATICMETADATUM\",real_number:r =r");
+        
+        sys.stdout.write("%s (%#8.8g,%#8.8g)" % (pys_modname,x,y));
+        pass
+      except (AttributeError,dg_python.dg_python_pygram_rpc_parse_error):
+        sys.stdout.write(pys_modname+" INVALID");
+        pass
+      pass
+    
+  }
+
+  {
+    try:
+      pygram.parse(r"""
+        command $
+          -> "SET\\?" =do_query();
+          -> "SET"  =dg_python.rpc_async(dg_python.rpc_async("%s?" % (pys_modname)))
+          -> "\\?" = do_query();
+          -> ws, '(',real_number:x,',',real_number:y,')' =:
+            dg_python.rpc_async("MATH:SETSTATICMETADATUM(IMGCHANPREFIX[[Uncorrected]]) $1_X %#8.8g" % x);
+            dg_python.rpc_async("MATH:SETSTATICMETADATUM(IMGCHANPREFIX[[Uncorrected]]) $1_Y %#8.8g" % y);
+            do_query();
+          -> ws, "INVALID" =:
+            do_query();
+          -> ws, "CLEAR" =:
+            dg_python.rpc_async("MATH:DELMETADATUM(IMGCHANPREFIX[[Uncorrected]]) $1_X");
+            dg_python.rpc_async("MATH:DELMETADATUM(IMGCHANPREFIX[[Uncorrected]]) $1_Y");
+            do_query();
+        """,cmd,globals(),globals(),preparsed=dg_python.pygram_boilerplate)
+    except (pygram.pyg_syntaxerror):
+      retcode=500
+      sys.stdout.write(pys_modname+" INVALID");
+      pass
+  }
+
+
+}
+]])
+
+# instantiate the four modules
+orthographiccornermetadatamoduletemplate(MINX_MINY)
+orthographiccornermetadatamoduletemplate(MINX_MAXY)
+orthographiccornermetadatamoduletemplate(MAXX_MAXY)
+orthographiccornermetadatamoduletemplate(MAXX_MINY)
+
+orthographiccornermetadatamoduletemplate(XYSIZE_MM)
+orthographiccornermetadatamoduletemplate(PIXELSIZE_MM)

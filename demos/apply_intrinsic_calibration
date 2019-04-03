@@ -1,0 +1,64 @@
+#! /usr/bin/python
+
+import sys
+import os
+import getpass
+
+import pylab as pl
+import numpy as np
+
+import cv2
+
+#import dg_units
+#dg_units.units_config("insert_basic_units")
+
+from limatix import lm_units
+lm_units.units_config("insert_basic_units")
+
+from limatix import xmldoc
+from limatix import dc_value
+
+
+
+from spatialnde import intrinsic_calibration
+from spatialnde import calibration_image
+from spatialnde import dg_undistort
+
+
+cic_file = os.path.join("/dataawareness/Camera_Calibration_files","flir_a35_63201313_calib_20150614_20150517sdh4.cic")
+
+input_file=os.path.join("/dataawareness/NASA_Modelling/Flash_Thermography_DGS","CA-1_Bottom_2015_11_19.dgs")
+
+output_file=os.path.join('/tmp',os.path.splitext(os.path.split(input_file)[1])[0]+"_undistorted.dgs")
+
+grow_factor=1.2
+
+# load in calibration
+calib=intrinsic_calibration.intrinsic_calibration.fromfile(cic_file)
+
+
+
+# create undistortion processor
+processor=intrinsic_calibration.undistortion_processor(calib,calib.sizex,calib.sizey,int(calib.sizex*grow_factor),int(calib.sizey*grow_factor),cv2.INTER_LINEAR,1.0)
+
+# load in .dgs file
+(dgs_metadata,dgs_wfmdict)=dgf.loadsnapshot(input_file,memmapok=True)
+
+# perform undistortion with processor
+new_wfmdict=dg_undistort.undistort_wfmdict(processor,dgs_wfmdict)
+
+# write out modified file 
+
+dgf_write=dgf.creat(output_file)
+dgf.startchunk(dgf_write,"SNAPSHOT");
+
+# provide identical metadata chunk
+dgf.writemetadata(dgf_write,dgs_metadata);
+
+# Write channels in same order as original waveform (dgs_wfmdict is an ordereddict)
+for wfmname in dgs_wfmdict:
+   dgf.writenamedwfm(dgf_write,new_wfmdict[wfmname])
+   pass
+dgf.endchunk(dgf_write) # SNAPSHOT
+dgf.close(dgf_write)
+

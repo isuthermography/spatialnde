@@ -1,0 +1,83 @@
+# fiducials are like landmarks but interpreted as temporary
+
+module fiducial("modules/pyscript.so") {
+  {
+
+  import re
+  import sys
+  import pygram
+  import dg_python
+  import traceback
+
+  # Set fiducials_mathchan (e.g. to "IRimg")
+  # in main dg_python config... This is the math channel
+  # on which the fiducials will be recorded... It usually
+  # will be the undistorted channel
+
+
+  # Set fiducials_onupdate to a function to call
+  # in main dg_python config... This will be called
+  # with the name of the updated fiducial. 
+
+  if not dg_python.findmodule("MATH"):
+    disabled=True;
+    pass
+
+  def fiducial_query(fiducial_name):
+    fiducial_name=str(fiducial_name.upper())    
+
+    try :
+      fiducial_x=dg_python.rpc_parse("MATH:GETMETADATUM?(%s) FIDUCIAL_%s_X" % (dg_python.fiducials_mathchan,fiducial_name),"\"MATH:GETMETADATUM\",identifier,\"STATICMETADATUM\",real_number:r =r");
+
+      fiducial_y=dg_python.rpc_parse("MATH:GETMETADATUM?(%s) FIDUCIAL_%s_Y" % (dg_python.fiducials_mathchan,fiducial_name),"\"MATH:GETMETADATUM\",identifier,\"STATICMETADATUM\",real_number:r =r");
+      
+      sys.stdout.write("%s %s (%#8.8g,%#8.8g)" % (pys_modname,fiducial_name,fiducial_x,fiducial_y));
+      pass
+    except (AttributeError,dg_python.dg_python_pygram_rpc_parse_error):
+      sys.stdout.write(pys_modname+" INVALID");
+      pass
+    pass
+
+  def fiducial_do_update(fiducial_name):
+    if "fiducials_onupdate" in dg_python.__dict__:
+      dg_python.fiducials_onupdate(fiducial_name)
+      pass
+      
+    pass
+
+  }
+  {
+  try:
+    #sys.stderr.write("globals=%s\n" % (str(globals())))
+    pygram.parse(r"""
+      command $
+        -> "SET\\?"
+        -> "SET"  
+        -> "\\?", ws, identifier:fiducial_name =:
+          fiducial_query(fiducial_name)
+        -> ws, identifier:fiducial_name,ws,'(',real_number:x,',',real_number:y,')' =:
+	  #sys.stderr.write("fiducial_name=%s; x=%s\n" % (str(fiducial_name.upper()),str(x)))
+          dg_python.rpc_async("MATH:SETSTATICMETADATUM(%s) FIDUCIAL_%s_X %#8.8e" % (dg_python.fiducials_mathchan,str(fiducial_name.upper()),x));
+	  #sys.stderr.write("rpc_cmd=MATH:SETSTATICMETADATUM(%s) FIDUCIAL_%s_X %#8.8e\n" % (dg_python.fiducials_mathchan,str(fiducial_name.upper()),x));
+          dg_python.rpc_async("MATH:SETSTATICMETADATUM(%s) FIDUCIAL_%s_Y %#8.8e" % (dg_python.fiducials_mathchan,str(fiducial_name.upper()),y));
+	  fiducial_do_update(fiducial_name)
+          fiducial_query(fiducial_name);
+        -> ws, identifier:fiducial_name,ws,"INVALID" =:
+          dg_python.rpc_async("MATH:DELMETADATUM(%s) FIDUCIAL_%s_X" % (dg_python.fiducials_mathchan,str(fiducial_name.upper())))
+          dg_python.rpc_async("MATH:DELMETADATUM(%s) FIDUCIAL_%s_Y" % (dg_python.fiducials_mathchan,str(fiducial_name.upper())))
+	  fiducial_do_update(fiducial_name)
+          fiducial_query(fiducial_name);
+        -> ws, identifier:fiducial_name,ws,"CLEAR" =:
+          dg_python.rpc_async("MATH:DELMETADATUM(%s) FIDUCIAL_%s_X" % (dg_python.fiducials_mathchan,str(fiducial_name.upper())))
+          dg_python.rpc_async("MATH:DELMETADATUM(%s) FIDUCIAL_%s_Y" % (dg_python.fiducials_mathchan,str(fiducial_name.upper())))
+	  fiducial_do_update(fiducial_name)
+          fiducial_query(fiducial_name);
+      """,cmd,globals(),globals(),preparsed=dg_python.pygram_boilerplate)
+  except (pygram.pyg_syntaxerror):
+    retcode=500
+    traceback.print_exc()
+    sys.stdout.write(pys_modname+" INVALID");
+    pass
+  }
+}
+

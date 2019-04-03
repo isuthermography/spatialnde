@@ -1,0 +1,93 @@
+# landmarks are like fiducials but interpreted as permanent
+
+module landmark("modules/pyscript.so") {
+  {
+
+  import re
+  import sys
+  import pygram
+  import dg_python
+  import traceback
+
+  # Set landmarks_mathchan (e.g. to "IRimg")
+  # in main dg_python config
+  # on which the landmarks will be recorded... It usually
+  # will be the undistorted channel
+
+  # Set landmarks_onupdate to a function to call
+  # in main dg_python config... This will be called
+  # with the name of the updated landmark. 
+
+
+  if not dg_python.findmodule("MATH"):
+    disabled=True;
+    pass
+
+  def landmark_query(landmark_name):
+    landmark_name=str(landmark_name.upper())    
+
+    try :
+      landmark_x=dg_python.rpc_parse("MATH:GETMETADATUM?(%s) LANDMARK_%s_X" % (dg_python.landmarks_mathchan,landmark_name),"\"MATH:GETMETADATUM\",identifier,\"STATICMETADATUM\",real_number:r =r");
+
+      landmark_y=dg_python.rpc_parse("MATH:GETMETADATUM?(%s) LANDMARK_%s_Y" % (dg_python.landmarks_mathchan,landmark_name),"\"MATH:GETMETADATUM\",identifier,\"STATICMETADATUM\",real_number:r =r");
+      
+      sys.stdout.write("%s %s (%#8.8g,%#8.8g)" % (pys_modname,landmark_name,landmark_x,landmark_y));
+      pass
+    except (AttributeError,dg_python.dg_python_pygram_rpc_parse_error):
+      sys.stdout.write(pys_modname+" " + landmark_name + " INVALID");
+      pass
+    pass
+
+  def landmark_do_update(landmark_name):
+    if "landmarks_onupdate" in dg_python.__dict__:
+      dg_python.landmarks_onupdate(landmark_name)
+      pass
+      
+    pass
+
+
+  }
+  {
+  try:
+    pygram.parse(r"""
+      command $
+        -> "SET\\?"
+        -> "SET"  
+        -> "\\?", identifier:landmark_name =:
+          landmark_query(landmark_name)
+        -> ws, identifier:landmark_name,'(',real_number:x,',',real_number:y,')' =:
+	  #sys.stderr.write("landmark_name=%s; x=%s\n" % (str(landmark_name.upper()),str(x)))
+          dg_python.rpc_async("MATH:SETSTATICMETADATUM(%s) LANDMARK_%s_X %#8.8e" % (dg_python.landmarks_mathchan,str(landmark_name.upper()),x));
+	  #sys.stderr.write("rpc_cmd=MATH:SETSTATICMETADATUM(%s) LANDMARK_%s_X %#8.8e\n" % (dg_python.landmarks_mathchan,str(landmark_name.upper()),x))
+          dg_python.rpc_async("MATH:SETSTATICMETADATUM(%s) LANDMARK_%s_Y %#8.8e" % (dg_python.landmarks_mathchan,str(landmark_name.upper()),y));
+          landmark_do_update(landmark_name)
+          landmark_query(landmark_name);
+        -> ws, identifier:landmark_name,"INVALID" =:
+          dg_python.rpc_async("MATH:DELMETADATUM(%s) LANDMARK_%s_X" % (dg_python.landmarks_mathchan,str(landmark_name.upper())))
+          dg_python.rpc_async("MATH:DELMETADATUM(%s) LANDMARK_%s_Y" % (dg_python.landmarks_mathchan,str(landmark_name.upper())))
+          landmark_do_update(landmark_name)
+          landmark_query(landmark_name);
+        -> ws, identifier:landmark_name,"CLEAR" =:
+          dg_python.rpc_async("MATH:DELMETADATUM(%s) LANDMARK_%s_X" % (dg_python.landmarks_mathchan,str(landmark_name.upper())))
+          dg_python.rpc_async("MATH:DELMETADATUM(%s) LANDMARK_%s_Y" % (dg_python.landmarks_mathchan,str(landmark_name.upper())))
+          landmark_do_update(landmark_name)
+          landmark_query(landmark_name);
+        -> ws, "CLEARALL" =:
+          mathdef = dg_python.rpc_async("MATH:DEF? %s" % (dg_python.landmarks_mathchan))
+	  components=mathdef.split(";")
+	  matches = [ re.match("MATH:SETSTATICMETADATUM\\(%s\\) (LANDMARK_\\w+) ([-+\\d\\.eE]+)" % (dg_python.landmarks_mathchan),component) for component in components ]
+          landmark_names = [ match.group(1) for match in matches if match is not None ]
+	  for landmark_name in landmark_names:
+	    dg_python.rpc_async("MATH:DELMETADATUM(%s) %s" % (dg_python.landmarks_mathchan,str(landmark_name.upper())))
+            landmark_do_update(landmark_name)
+            pass
+          sys.stdout.write("%s CLEARALL" % (pys_modname))
+      """,cmd,globals(),globals(),preparsed=dg_python.pygram_boilerplate)
+  except (pygram.pyg_syntaxerror):
+    retcode=500
+    traceback.print_exc()
+    sys.stdout.write(pys_modname+" INVALID");
+    pass
+  }
+}
+

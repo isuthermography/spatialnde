@@ -1,0 +1,34 @@
+
+  pyinit x3d_vrml_textureprefix {[[
+    from lxml import etree
+    import sys
+    import os
+    import os.path
+
+    import dg_metadata as dgm
+
+
+  ]]}
+
+  # Create a reference to a 3D geometry that uses prefixed texture channels
+  # also update Scope_KeyboardControlChan metadata, if present
+  pyfunc x3d_vrml_textureprefix.textureprefix(prefixedchannel:dep,x3d_vrml_channel:dep,prefix:string) {[[   #@qtconsole
+
+
+    SplitTextureChans=dgm.GetMetaDatumWIStr(x3d_vrml_channel,"TextureChans","").split("|")
+    PrefixedTextureChans="|".join([ prefix+TexChan for TexChan in SplitTextureChans ])
+    
+    result = makeresult(ModData,0,(1,))
+    dgm.AddMetaDatumWI(result,dgm.MetaDatum("VRML97GeomRef",x3d_vrml_channel.Name))
+    dgm.AddMetaDatumWI(result,dgm.MetaDatum("X3DGeomRef",x3d_vrml_channel.Name))
+    dgm.AddMetaDatumWI(result,dgm.MetaDatum("TexChanPrefix",prefix))
+    dgm.AddMetaDatumWI(result,dgm.MetaDatum("TextureChans",PrefixedTextureChans))
+    KbdCtrlChan = dgm.GetMetaDatumWIStr(x3d_vrml_channel,"Scope_KeyboardControlChan",None)
+    if KbdCtrlChan is not None:
+      dgm.AddMetaDatumWI(result,dgm.MetaDatum("Scope_KeyboardControlChan",prefix + KbdCtrlChan))
+      pass
+
+    return result
+      
+
+  ]]}

@@ -1,0 +1,22 @@
+# This defines a series of math channels related
+# to object OBJ (specimen id with dashes changed to underscores)
+# which defines the various projection and stack channels
+
+# m4 symbols to define: 
+# IMGCHANPREFIX: Name of input image channel/channel prefix
+
+main {
+
+  initcommand="math:def IMGCHANPREFIX[[Unprojected_NPL]]=undistort_intrinsic.undistort_intrinsic(IMGCHANPREFIX[[DistortedUnprojected]],cameracalib,1.2)"
+
+  initcommand="math:def [[Pose_]]OBJ[[=]]uv_projection.solve_pnp_landmarks(IMGCHANPREFIX[[Unprojected_NPL]],OBJ[[_tex]],OBJ,cameracalib)" # will be overridden once SPECIMENORIENTATION is specified
+  initcommand="math:def IMGCHANPREFIX[[Unprojected]]=uv_projection.image_with_projected_landmarks(IMGCHANPREFIX[[Unprojected_NPL]],[[Pose_]]OBJ)"
+
+  initcommand="math:def IMGCHANPREFIX[[_]]OBJ[[_tex=]]uv_projection.uv_projection(IMGCHANPREFIX[[Unprojected_NPL]],OBJ[[_tex]],[[Pose_]]OBJ,OBJ,cameracalib)"
+  initcommand="math:def IMGCHANPREFIX=COPY(IMGCHANPREFIX[[_]]OBJ[[_tex]])"
+
+  initcommand="math:def [[Proj]]IMGCHANPREFIX[[_]]OBJ=x3d_vrml_textureprefix.textureprefix(IMGCHANPREFIX[[_]]OBJ[[_tex]],OBJ,'IMGCHANPREFIX[[_]]')"
+
+
+
+}

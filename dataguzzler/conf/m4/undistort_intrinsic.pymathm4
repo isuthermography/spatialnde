@@ -1,0 +1,56 @@
+
+pyinit undistort_intrinsic {[[
+
+  from lxml import etree
+  import sys
+  import os
+  import os.path
+  import copy
+  import numpy as np
+  import string
+  import struct
+  import cv2
+
+ 
+  from spatialnde import intrinsic_calibration
+  from spatialnde import calibration_image
+  from spatialnde import dg_undistort
+
+
+  processorcache={}  # dictionary of undistortion processors, indexed by tuple(cic_file,grow_factor)
+
+]]}
+
+pyfunc undistort_intrinsic.undistort_intrinsic(IRimg:dep,cic_file:string,grow_factor:float) {[[ # @qtconsole
+
+
+  # We don't want to reload cic_file on each goaround, so we store
+  # a cache of undistortion processors in a global, indexed
+  # by (cic_file,grow_factor)
+  cacheindex=(cic_file,grow_factor)
+
+  # do the cache lookup
+  if cacheindex not in processorcache:
+    # not found... load it in
+    calib=intrinsic_calibration.intrinsic_calibration.fromfile(cic_file)
+
+    processorcache[cacheindex]=intrinsic_calibration.undistortion_processor(calib,calib.sizex,calib.sizey,int(calib.sizex*grow_factor),int(calib.sizey*grow_factor),cv2.INTER_LINEAR,1.0)
+    pass
+  
+  processor=processorcache[cacheindex]
+
+  # Once we know the shape of our output array, we call makeresult() 
+  # where the third argument is that shape
+  result=makeresult(ModData,0,np.array(IRimg.dimlen*grow_factor,dtype=np.int64));
+
+  if len(IRimg.dimlen) != 0 and np.prod(IRimg.dimlen) != 0:
+    # do we have a non-empty input waveform...?
+
+    # if so, apply undistortion processor to IRimg
+    dg_undistort.undistort_wfm_given_emptystruct(processor,IRimg,result) 
+    pass
+
+  return result
+
+
+]]}

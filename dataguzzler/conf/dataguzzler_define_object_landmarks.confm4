@@ -1,0 +1,60 @@
+# USAGE:  dataguzzler dataguzzler_define_object_landmarks.confm4 OBJ=<basename>
+# Where <basename> is the name provided to dataguzzler_define_landmarks_load_x3d.py
+# but with any paths stripped, the .x3d extension stripped, AND ANY DASHES
+# CONVERTED TO UNDERSCORES
+
+
+m4_include(`m4/stddef.confhm4')
+
+
+
+m4_include([[m4/stdlib.confhm4]])
+m4_include([[m4/dg_python_pygram.confhm4]])
+
+# additional parameters for dg_python (also configured above)
+library "libraries/dg_python.so" {
+
+  def landmarks_onupdate(landmarkname):
+    dg_python.rpc_async("WFM:COPY OBJ[[_tex_raw]] OBJ[[_tex_src]]")
+    pass
+
+  landmarks_mathchan="OBJ[[_tex]]"
+  fiducials_mathchan="OBJ[[_tex]]"
+
+
+  fiducials_onupdate=landmarks_onupdate
+
+  #sys.stderr.write("EXECUTED... landmarks_mathchan=%s\n" % (landmarks_mathchan))
+  
+}
+
+
+m4_include([[m4/stdmod.confhm4]])
+
+module math("modules/wfmmath.so") {  
+  numthreads = -1 # use number of CPU's + 1 
+ 
+  pymath {
+    # Support Python-based math functions
+    m4_include([[m4/stdinit.pymathm4]])
+    m4_include([[m4/stdfunc.pymathm4]])
+  
+    # (can add custom math functions here)
+  }
+}
+
+# Load in 3D model and 2D parameterization.... 
+
+# Define math copy waveform that references texture map
+
+# Provide commands to define landmarks that also trigger
+# waveform update.
+
+m4_include([[m4/fiducials.confhm4]])
+m4_include([[m4/landmarks.confhm4]])
+
+# Provide way to save image with landmarks.
+
+main {
+  initcommand="MATH:DEF OBJ[[_tex]]=COPY(OBJ[[_tex_src]])"
+}

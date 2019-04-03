@@ -1,0 +1,135 @@
+
+  pyinit orthographic_correction {[[
+    from lxml import etree
+    import sys
+    import os
+    import os.path
+    import copy
+    import numpy as np
+    import string
+    import struct
+    import cv2
+
+    from spatialnde import intrinsic_calibration
+    from spatialnde import dg_undistort
+    from spatialnde.calibration_image import uint_to_float
+    from spatialnde.calibration_image import float_to_uint
+
+    import dg_metadata as dgm
+
+
+  ]]}
+
+  pyfunc orthographic_correction.orthographic_correction(undistorted_with_metadata:dep) {[[   #@qtconsole
+
+    metadataerr=False
+    empty=False
+
+    try:
+      xysize_mm_x=undistorted_with_metadata.MetaData["XYSIZE_MM_X"].Value
+      xysize_mm_y=undistorted_with_metadata.MetaData["XYSIZE_MM_Y"].Value
+
+      pixelsize_mm_x=undistorted_with_metadata.MetaData["PIXELSIZE_MM_X"].Value
+      pixelsize_mm_y=undistorted_with_metadata.MetaData["PIXELSIZE_MM_Y"].Value
+
+      new_x_dim=int(xysize_mm_x/pixelsize_mm_x)
+      new_y_dim=int(xysize_mm_y/pixelsize_mm_y)
+
+      old_x_dim=undistorted_with_metadata.dimlen[0]
+      old_y_dim=undistorted_with_metadata.dimlen[1]
+
+      old_inival1=undistorted_with_metadata.MetaData["IniVal1"].Value
+      old_inival2=undistorted_with_metadata.MetaData["IniVal2"].Value
+
+      assert(undistorted_with_metadata.MetaData["Step1"].Value==1.0)
+      assert(undistorted_with_metadata.MetaData["Step2"].Value==1.0)
+
+      # Extract coordinates of corner pixels, while converting from 
+      # dataguzzler coordinates (starting at (inival1,inival2) at lower
+      # left) into raster coordinates
+      minx_miny_x = undistorted_with_metadata.MetaData["MINX_MINY_X"].Value-old_inival1
+      minx_miny_y = old_y_dim-1-(undistorted_with_metadata.MetaData["MINX_MINY_Y"].Value-old_inival2)
+
+      minx_maxy_x = undistorted_with_metadata.MetaData["MINX_MAXY_X"].Value-old_inival1
+      minx_maxy_y = old_y_dim-1-(undistorted_with_metadata.MetaData["MINX_MAXY_Y"].Value-old_inival2)
+
+      maxx_maxy_x = undistorted_with_metadata.MetaData["MAXX_MAXY_X"].Value-old_inival1
+      maxx_maxy_y = old_y_dim-1-(undistorted_with_metadata.MetaData["MAXX_MAXY_Y"].Value-old_inival2)
+
+      maxx_miny_x = undistorted_with_metadata.MetaData["MAXX_MINY_X"].Value-old_inival1
+      maxx_miny_y = old_y_dim-1-(undistorted_with_metadata.MetaData["MAXX_MINY_Y"].Value-old_inival2)
+      
+
+      pts1=np.array( ((minx_miny_x,minx_miny_y),
+                      (minx_maxy_x,minx_maxy_y),
+                      (maxx_maxy_x,maxx_maxy_y),
+                      (maxx_miny_x,maxx_miny_y)),
+                      dtype='d')
+
+      # sys.stderr.write("pts1=%s\n" % (str(pts1)))
+      pts2=np.array(( (0.0,0.0), (0.0,new_y_dim-1), (new_x_dim-1,new_y_dim-1), (new_x_dim-1,0.0)))
+      pass
+    except KeyError:
+      metadataerr=True
+      pass
+
+    
+
+    if (undistorted_with_metadata.ndim < 1 or
+        undistorted_with_metadata.ndim > 3 or  
+        np.prod(undistorted_with_metadata.dimlen)==0 or
+        metadataerr):
+      # Invalid or inadequate input... generate empty output
+      dimlen=np.array((),dtype=np.int64)
+      empty=True
+    elif undistorted_with_metadata.ndim==2:
+      dimlen=np.array((new_x_dim,new_y_dim),dtype=np.int64)
+      pass
+    else: 
+      # ndim==3
+      dimlen=np.array((new_x_dim,new_y_dim,undistorted_with_metadata.data.shape[2]),dtype=np.int64)
+      pass
+
+
+    result=makeresult(ModData,0,dimlen)
+
+    if not empty:
+      assert(undistorted_with_metadata.ndim >= 2 and undistorted_with_metadata.ndim <= 3)
+
+
+  
+
+      # Reverse sense of pts2 so our transform doesn't give the image an extra flip, considering minimum x is to the lower left
+      pts2[:,1]=new_y_dim-1-pts2[:,1]
+
+      transformation_matrix = cv2.getPerspectiveTransform(np.float32(pts1),np.float32(pts2))
+
+
+      result.MetaData=copy.deepcopy(undistorted_with_metadata.MetaData)
+
+      # Origin is treated as the (minx, miny) image corner. IniVal represents pixel center
+      dgm.AddMetaDatumWI(result,dgm.MetaDatum("IniVal1",pixelsize_mm_x/(2.0*1000.0)))
+      dgm.AddMetaDatumWI(result,dgm.MetaDatum("IniVal2",pixelsize_mm_y/(2.0*1000.0)))
+      dgm.AddMetaDatumWI(result,dgm.MetaDatum("Step1",pixelsize_mm_x/1000.0))
+      dgm.AddMetaDatumWI(result,dgm.MetaDatum("Step2",pixelsize_mm_y/1000.0))
+      dgm.AddMetaDatumWI(result,dgm.MetaDatum("Units1","meters"))
+      dgm.AddMetaDatumWI(result,dgm.MetaDatum("Units2","meters"))
+
+      if undistorted_with_metadata.ndim==2:
+        toperspective=undistorted_with_metadata.data[:,::-1].T
+        orthographic_image=cv2.warpPerspective(toperspective,transformation_matrix, (new_x_dim,new_y_dim))
+        result.data[:,::-1]=orthographic_image.T
+        pass
+      else: 
+        # wfm.ndim==3
+        for framecnt in range(undistorted_with_metadata.data.shape[2]):
+          # Correct for dataguzzler image origins in lower left corner
+          toperspective=undistorted_with_metadata.data[:,::-1,framecnt].T
+          orthographic_image=cv2.warpPerspective(toperspective,transformation_matrix, (new_x_dim,new_y_dim))
+          result.data[:,::-1,framecnt]=orthographic_image.T
+          pass
+        pass
+      pass
+    return result
+
+  ]]}

@@ -1,0 +1,72 @@
+1. FreeCAD drawing of part -> .fcstd file
+2. Use FreeCAD 0.17-prerelease from /usr/local/src/freecad-git010217/build/bin/
+   to perform NETGEN surface meshing. Use 'Fine' or 'Very Fine' setting. Export .x3d file. 
+3. FreeCAD does not currently use correct units in its .x3d files.
+   Edit the .x3d file, setting "scale='.001 .001 .001'" in the <Transform> tag
+   so that the coordinates are interpreted in mm.
+4. Open blender. Middle mouse button zooms. Alt left mouse button
+rotates. Shift alt left mouse button slides... Delete default cube. 
+Import .x3d file and zoom into it.
+   Alt-right-mouse button to select it (may freeze for a minute... just be patient), then switch from object mode to edit
+   mode.
+   Go into edge selection mode. Select seams. Mark seams. Go into
+   face selection mode. Select all faces. 
+   Perform unwrapping. Unwrap params should appear at the bottom of the toolbar to your left. Adjust parameterization params
+   from "angle based" to  "conformal mode" (bottom of tool shelf (press 'T')
+   In lower window, select "UV/Image Editor. 
+   Verify
+   parameterization.
+   MAKE SURE HIGH PRECISION TEXTURE COORDINATE MAPPING IS ENABLED...
+   see blender_io_scene_x3d.patch (also in software/blender_x3d_hirestex...)
+   must be turned on in preferences...addons. Adjust resolution when exporting suggest 8 digits. 
+   Export as X3D to a _UV.x3d file
+   WARNING: blender will rotate the x,y,z axes on x3d import, but it rotates 
+            them back on x3d export (!)
+
+4.5 Add Curvatures from CAD file. You must use a .brep, .step, or .iges file that
+matches the meshed representation exactly!
+Run x3d_add_curvature.py <X3DFile_With_UV> <CADfile.brep_step_or_iges> [ -o <Output_X3D_With_UV_and_curvature> ]
+
+5. Run dataguzzler with dataguzzler_define_object_landmarks.confm4 OBJ=<basename>  (Make sure
+<basename> has any dashes converted to underscores!)
+
+Run python dataguzzler_define_landmarks_load_x3d.py X3Dfile_UV_Curvature.x3d "(1024,1024)"... to load in an x3d file... plus checkerboard pattern. into a 1024x1024 parameterization
+
+6. OPTIONAL: If the parameterization is (largely) conformal and of
+(roughly) uniform scale, it may be useful to apply units to the U
+and V coordinates. To do this, under the initial load with
+dataguzzler_define_landmarks_load_x3d.py, evaluate the apparent distance
+horizontally h and vertically v across the checkerboard for points
+a known distance apart. Then
+  horizontal scale factor = known horiz dist*1024/h
+  vertical scale factor = known vert dist*1024/v
+Where 1024 is the size of the pixel image created by
+dataguzzler_define_landmarks_load_x3d.py
+Example: horizontal distance = 614px  -> .470 m.
+  horiz scale = .470*1024/614 = .783 meters/teximage width
+vertical distance = 63 px -> .048 m.
+  vert scale = .048*1024/63 = .780 meters/teximage width
+
+Then you can rerun dataguzzler_define_landmarks_load_x3d.py with the horizontal and
+vertical scale factors as two separate additional command line parameters
+
+7. Use the LANDMARK and/or FIDUCIAL
+commands to define landmarks/fiducials
+Use dg_snapshot to save a _landmarks.dgs file.
+This can be loaded back in if you want to edit the landmarks 
+using  the landmarks_from_dgsfile.py script)
+FUTURE: currently require all landmarks on a single multi-segment
+surface parameterization. Will need to support specifying which
+surface.
+
+
+# Can Use dgslandmarks2ndeobj_params to convert the .dgs
+# to landmark and intrinsic parameterization params... These are like the ones in the top of testregistration.py
+
+8. Run dataguzzler with dataguzzler_flash_undistort_uvproject.confm4
+with command line parameters like (note underscores in OBJ not dashes)
+OBJ=CR03_SPAR_01H 
+Use dg_load_snapshot to load the snapshot from step 7.
+Use dg_load_snapshot to load the thermal camera calibration
+Use the LANDMARK command to identify points on the IRimgUnprojected channel
+Once enough landmarks are defined it should start projecting. 

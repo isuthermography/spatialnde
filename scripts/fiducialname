@@ -1,0 +1,24 @@
+#! /usr/bin/env python
+
+import sys
+# Generate and print a name to be used for a fiducial mark
+
+from spatialnde.fiducialname import fiducialname
+
+if len(sys.argv) > 1 and (sys.argv[1]=="-h" or sys.argv[1]=="--help"):
+    print("fiducialname generates suitable five or six character names")
+    print("for fiducial marks. A leading character can be specified if")
+    print("desired")
+    print("Usage: fiducialname [leading character]")
+    sys.exit(0)
+    pass
+
+if len(sys.argv) > 1:
+    
+    print(fiducialname(sys.argv[1]))
+    pass
+else:
+    print(fiducialname())
+    pass
+
+

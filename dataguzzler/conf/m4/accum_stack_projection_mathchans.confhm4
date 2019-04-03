@@ -1,0 +1,42 @@
+# This defines a series of math channels related
+# to object OBJ (specimen id with dashes changed to underscores)
+# which defines the various projection and stack channels
+# so as to support accumulating data from multiple orientations
+# in a single coherent parameterization
+
+
+# m4 symbols to define: 
+# IMGCHANPREFIX: Name of input image channel/channel prefix
+# STACKCHAN: Name of image stack channel/channel prefix 
+
+main {
+
+  initcommand="math:def IMGCHANPREFIX[[Unprojected_NPL]]=undistort_intrinsic.undistort_intrinsic(IMGCHANPREFIX[[DistortedUnprojected]],CAMERACALIB,1.2)"
+
+  initcommand="math:def [[Pose_]]OBJ[[=]]uv_projection.solve_pnp_landmarks(IMGCHANPREFIX[[Unprojected_NPL]],OBJ[[_tex]],OBJ,CAMERACALIB)"  # will be overridden once SPECIMENORIENTATION is specified
+  initcommand="math:def IMGCHANPREFIX[[Unprojected]]=uv_projection.image_with_projected_landmarks(IMGCHANPREFIX[[Unprojected_NPL]],[[Pose_]]OBJ)"
+  initcommand="math:def IMGCHANPREFIX=uv_projection.accumulable_uv_projection(IMGCHANPREFIX[[Unprojected_NPL]],OBJ[[_tex]],[[Pose_]]OBJ,OBJ,CAMERACALIB)"
+  initcommand="math:def IMGCHANPREFIX[[_]]OBJ[[_tex]]=uv_projection.image_from_accumulable(IMGCHANPREFIX)"
+
+
+  initcommand="math:def [[Proj]]IMGCHANPREFIX[[_]]OBJ=x3d_vrml_textureprefix.textureprefix(IMGCHANPREFIX[[_]]OBJ[[_tex]],OBJ,'IMGCHANPREFIX[[_]]')"
+
+  initcommand="math:def STACKCHAN[[_tex]]=uv_projection.image_from_accumulable(STACKCHAN)"
+
+
+  #initcommand="math:def [[Proj]]STACKCHAN[[_]]OBJ[[=]]x3d_vrml_textureprefix.textureprefix('OBJ',STACKCHAN[[_]]OBJ[[_tex]],'STACKCHAN[[_]]')"
+  initcommand="math:def ([[DiffStack_]]OBJ[[_tex]],[[DiffStack_]]OBJ[[_tex_weights]])=uv_projection.subearlyavg_accumulable_uv(STACKCHAN,bkgnd_subtract_time)"   # subearlyavg_accumulable operates on STACKCHAN[:,:,0,:] and STACKCHAN[:,:,1,:] over the final index, so that it modifies the normalized and unnormalized data channels but not the validitybuf
+  #initcommand="math:def [[DiffStack_]]OBJ[[_tex=]]uv_projection.image_from_accumulable([[DiffStack_]]OBJ[[_accumtex]])"
+
+  initcommand="math:def [[ProjDiffStack_]]OBJ[[=]]x3d_vrml_textureprefix.textureprefix([[DiffStack_]]OBJ[[_tex]],OBJ,'DiffStack_')"
+
+
+  initcommand="math:def ([[AccumDiffStack_]]OBJ[[_tex]],[[AccumDiffStack_]]OBJ[[_tex_weights]])=uv_projection.accum_uv_projection_stack([[AccumDiffStack_]]OBJ[[_tex]],[[AccumDiffStack_]]OBJ[[_tex_weights]],[[DiffStack_]]OBJ[[_tex]],[[DiffStack_]]OBJ[[_tex_weights]])"   # accumulate data from multiple shots
+
+  #initcommand="math:def [[AccumDiffStack_]]OBJ[[_tex=]]uv_projection.image_from_accumulable([[AccumDiffStack_]]OBJ[[_accumtex]])"
+
+
+  initcommand="math:def [[ProjAccumDiffStack_]]OBJ[[=]]x3d_vrml_textureprefix.textureprefix([[AccumDiffStack_]]OBJ[[_tex]],OBJ,'AccumDiffStack_')"
+
+
+}

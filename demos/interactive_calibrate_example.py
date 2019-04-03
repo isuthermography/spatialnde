@@ -1,0 +1,131 @@
+__author__ = 'bryan'
+
+try:
+    # py2.x
+    from urllib import pathname2url
+    from urllib import url2pathname
+    from urllib import quote
+    from urllib import unquote
+    pass
+except ImportError:
+    # py3.x
+    from urllib.request import pathname2url
+    from urllib.request import url2pathname
+    from urllib.parse import quote
+    from urllib.parse import unquote
+    pass
+
+import sys, os, copy
+import numpy as np
+import cv2
+
+from limatix import dc_value
+
+#sys.path.insert(0, 'scripts/spatialnde_local')
+from spatialnde import DGSViewer
+from spatialnde import calibration_image
+from spatialnde import intrinsic_calibration
+
+import argparse
+
+# Default values passed to the viewer
+frame_number = 20
+units_per_intensity = 1.0
+offset = 0.0
+
+# Example commands: 
+# cd /databrowse/TRI_FlashThermography
+# python scripts/spatialnde_local/demos/interactive_calibrate_example.py TRI_specimen04_files/TRI_specimen04_flashcalibration.dgs -o TRI_specimen04_files/sc6000calib_bryans70.cic -ch DiffStack -pt symmetric_circles -ps 25.4 mm -px 15 -py 15
+
+parser = argparse.ArgumentParser()
+parser.add_argument('imagesource', help='Image source file. Can be .dgs or .png.', type=str)
+parser.add_argument('-o', '--calibsource', help='Output calibration file (or calibration file to append to).', type=str)
+parser.add_argument('-ch', '--channel', help='Channel to use if importing a DGS file.', type=str, default='DiffStack')
+parser.add_argument('-pt', '--pattern_type', help='Type of pattern used.', type=str, choices=['chessboard', 'symmetric_circles', 'assymetric_circles', 'assymetric_circles_offset'], default='chessboard')
+parser.add_argument('-ps', '--pattern_spacing', help='Spacing of pattern points (circle centers or checkerboard corners). First argument is value, second is units.', nargs=2, type=str)
+parser.add_argument('-px', '--pattern_num_x', help='Total number of pattern columns.', type=int, default=2)
+parser.add_argument('-py', '--pattern_num_y', help='Total number of pattern rows.', type=int, default=2)
+parser.add_argument('-f', '--cvflags', help='OpenCV flags', type=int, default=0)
+parser.add_argument('--invert', help='Used to invert the image.', action='store_true')
+
+args = parser.parse_args()
+
+calibsource = dc_value.hrefvalue(pathname2url(args.calibsource))
+imagesource = dc_value.hrefvalue(pathname2url(args.imagesource))
+channel = args.channel
+pattern_type = args.pattern_type
+pattern_spacing = dc_value.numericunitsvalue(float(args.pattern_spacing[0]), args.pattern_spacing[1])
+pattern_num_x = args.pattern_num_x
+pattern_num_y = args.pattern_num_y
+invert = args.invert
+cvflags = args.cvflags
+
+if calibsource is None:
+    dirname = os.path.dirname(imagesource)
+    basename = os.path.basename(imagesource)
+
+    calibsource = os.path.join(dirname, basename + '.cic')
+    pass
+
+paramdict={
+            "input_href": imagesource,
+            "channel_name": channel,
+            "frame_number": frame_number,
+            "offset": offset,
+            "units_per_intensity": units_per_intensity,
+            "invert": invert,
+            "cvflags": cvflags,
+            "pattern_type": pattern_type,
+            "pattern_num_x": pattern_num_x,
+            "pattern_num_y": pattern_num_y,
+            "pattern_spacing": pattern_spacing
+            }
+
+# Sets up the viewer based on arguments passed from command line
+reopen=True
+pattern_num = (0,0)
+
+viewer = DGSViewer.VIEWER(paramdict, calibsource, (pattern_num_x, pattern_num_y))
+viewer.initialize_plot()
+reopen = viewer.enter_interactive_mode()
+
+while reopen:
+    pattern_num_x = viewer.pattern_num_x
+    pattern_num_y = viewer.pattern_num_y
+
+    # Setup plotting window and call interactive mode
+    viewer.initialize_plot()
+
+    viewer.reopen = False
+    nx = viewer.im_size[1]
+    ny = viewer.im_size[0]
+
+    assert(pattern_num_x*pattern_num_y == len(viewer.picked_points))
+
+    pts = []
+    for pt in viewer.picked_points:
+        print pt
+        pts.append([pt[0], pt[1]])
+        pass
+
+    pts = np.swapaxes(np.array([pts], np.float32), 0, 1)
+
+    new_params = viewer.current_source.params.copy_and_update(pattern_num_x=viewer.pattern_num_x, pattern_num_y=viewer.pattern_num_y)
+    viewer.current_source = calibration_image.calibration_image(new_params, image_points=pts)
+    
+    viewer.current_searched = copy.copy(viewer.current_source)
+    viewer.intrinsic_calibration = intrinsic_calibration.intrinsic_calibration(viewer.calibration_images + [viewer.current_searched],nx,ny)
+    viewer.undistortion_processor = intrinsic_calibration.undistortion_processor(viewer.intrinsic_calibration,nx,ny,nx,ny,interpolation=cv2.INTER_LINEAR,alpha=1.0)
+
+    viewer.clear_picked(viewer.picked_points)
+    viewer.picked_points = []
+    
+    viewer.clear_coverage()
+    viewer.clear_found()
+
+    viewer.plot_coverage()
+    viewer.plot_found()
+
+    reopen = viewer.enter_interactive_mode()
+    pass
+

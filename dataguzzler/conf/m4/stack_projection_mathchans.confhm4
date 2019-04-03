@@ -1,0 +1,20 @@
+# This defines a series of math channels related
+# to object OBJ (specimen id with dashes changed to underscores)
+# which defines the various projection and stack channels
+
+# m4 symbols to define: 
+# IMGCHANPREFIX: Name of input image channel/channel prefix
+# STACKCHAN: Name of image stack channel/channel prefix 
+
+
+m4_include([[m4/projection_mathchans.confhm4]])
+main {
+
+
+  #initcommand="math:def [[Proj]]STACKCHAN[[_]]OBJ[[=]]x3d_vrml_textureprefix.textureprefix('OBJ',STACKCHAN[[_]]OBJ[[_tex]],'STACKCHAN[[_]]')"
+  initcommand="math:def [[DiffStack_]]OBJ[[_tex=]]subearlyavg(STACKCHAN,bkgnd_subtract_time)"
+
+  initcommand="math:def [[ProjDiffStack_]]OBJ[[=]]x3d_vrml_textureprefix.textureprefix([[DiffStack_]]OBJ[[_tex]],OBJ,'DiffStack_')"
+
+
+}

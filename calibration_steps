@@ -1,0 +1,35 @@
+CALIBRATION PROCESS
+
+COLLECT DATA: Collect images of calibration patterns. This could be in the form of .dgs files, .png's, or another image format. Calibration patterns should be one of the supported types (checkerboard, symmetric or asymmetric circles).
+
+CALL VIEWER: For interactive calibration, run the interactive calibration script (interactive_calibrate_example.py) with the following named arguments:
+
+- calibsource=relative path to existing camera calibration. If none exists, a new file will be created.
+- imagefile=relative path to pattern image
+- channel=channel to use if DGS file
+- pattern_type=type of pattern to search for in the image
+- pattern_spacing=spacing between pattern points (circle centers or checkerboard corners)
+- pattern_max=maximum number of pattern points to search for
+
+Named arguments separated from their value by an equal sign with no spaces. For pattern spacing, include the value and the units surrounded by quotations (Example: pattern_spacing='25 mm'). Add the flag '--invert' to invert the grayscale image in the viewer.
+
+CHOOSE FRAME: After running the command, the viewer will load. If the image source is a DGS file, navigate frames with (</>), change offset with (right/left), and change units per intensity with (up/down). Navigate to a frame and set offset and units per intensity so that the pattern has good contrast and circles or checkerboard squares are clearly visible.
+
+SEARCH PATTERN: Press 'c' to search the pattern. It will search for the maximum pattern size visible, up to (pattern_max, pattern_max).
+
+--- OR ---
+
+MANUAL: To ensure that the grid is fully covered, the points can be chosen manually. The grid points are chosen by left clicking. 
+IMPORTANT: When choosing grid points manually they must be chosen starting at the top left, moving horizontally to the right, moving down one row and starting over on the left end. 
+If you need to remove a grid point, use right click. If a grid point is removed, ensure that all of the remaining grid points were chosen in the order described above (i.e. if you wish to remove a point in the middle, you must also remove every point chosen after it to preserve the grid order).
+After you are satisfied with the chosen grid, press 'm' and you will be prompted for the grid dimensions.
+
+VERIFY DISTORTION CORRECTION: When it has finished searching, or after the manual grid points have been entered, the found/chosen points will be plotted with white circles. To see the undistorted image, press 'u'. The points will also be circled in red to indicate the coverage of the pattern (helpful when performing distortion correction from multiple sources).
+
+WRITE TO FILE: If you are satisfied with the undistortion, press 'w' to write the calibration to the file passed as calibsource. To save a .png snapshot of the current view, press 's'. If you are not satisfied with the undistortion, press 'r' to reset the pattern to only use calibration that has already been written to the file. Otherwise, researching the pattern will overwrite any unwritten calibration views.
+
+REPEAT FOR ADDITIONAL VIEWS: Multiple calibrations can be used to generate the undistorted image. To write additional calibrations to file, change any parameters, search the pattern, and press 'w'. Any subsequent calls to undistort ('u') will use any calibration data written to file, as well as the calibration from the current pattern points shown. When finished, press <Esc> to exit. Running the command on the same calibration source file will import the existing camera calibration and any calls to 'w' will append additional views to the file.
+
+The red circles indicate all of the available image points from all of the calibration sources in the file.
+
+

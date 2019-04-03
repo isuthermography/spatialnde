@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<snic:intrinsic_calibration xmlns:dcv="http://limatix.org/dcvalue" xmlns:snci="http://thermal.cnde.iastate.edu/spatialnde/calibrationimage" xmlns:snic="http://thermal.cnde.iastate.edu/spatialnde/intrinsiccalibration" xmlns:xlink="http://www.w3.org/1999/xlink">
+<snic:sizex>1280</snic:sizex>
+<snic:sizey>1024</snic:sizey>
+  <snic:cameramatrix dcv:arraystorageorder="C" dcv:valueclass="array">
+    <dcv:arrayshape>3 3</dcv:arrayshape>
+    <dcv:arraydata>  1.31927746e+03   0.00000000e+00   5.81784401e+02   0.00000000e+00
+   1.26611521e+03   4.77757067e+02   0.00000000e+00   0.00000000e+00
+   1.00000000e+00
+</dcv:arraydata>
+  </snic:cameramatrix>
+  <snic:distcoeffs dcv:arraystorageorder="C" dcv:valueclass="array">
+    <dcv:arrayshape>1 5</dcv:arrayshape>
+<dcv:arraydata>-0.23689926  0.15054272  0.00856781 -0.00365009 -0.05955574</dcv:arraydata>
+  </snic:distcoeffs>
+</snic:intrinsic_calibration>

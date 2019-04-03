@@ -1,0 +1,485 @@
+# dataguzzler_contact_ut_project.confm4 usage:
+#   dataguzzler dataguzzler_contact_ut_project.confm4 OBJ=<SPECIMEN_ID_WITH_DASHES_CONVERTED_TO_UNDERSCORES>
+
+# INSTRUCTIONS:
+#  1. Load specimen UV-parameterized and landmarked X3D model
+#  2. with transducer not touching specimen, WFM:COPY UT_raw UT_nocontact
+#  3. Set a suitable pose matrix, e.g. 
+#   It represents orientation of specimen relative to transducer, and 
+#   is written column-major (Fortran style), e.g. 
+#   SPECIMENORIENTATION -0.822281 -0.56886399 -0.015757 0.0 -0.047782999 0.041425001 0.99799901 0.0 -0.56707299 0.82138699 -0.061246 0.0 0.040566001 -0.093078002 -0.55540699 1.0
+
+m4_include(`m4/stddef.confhm4')
+
+m4_define([[DLECHO_START_US]],[[10]])
+m4_define([[DLECHO_END_US]],[[10.56]])
+
+m4_define([[CSCAN_GATE_START_US]],[[10.5]])
+m4_define([[CSCAN_GATE_END_US]],[[14]])
+
+m4_define([[TRANSDUCERDIAMETER_MM]],[[12.5]])
+m4_define([[TRANSDUCER_PIXEL_SZ_MM]],[[6]])
+
+m4_include([[m4/stdlib.confhm4]])
+m4_include([[m4/dg_python_pygram.confhm4]])
+
+m4_include([[m4/stdmod.confhm4]])
+
+module math("modules/wfmmath.so") {  
+  numthreads = 2 # -1 would mean use number of CPU's + 1 
+  debugmode=true
+ 
+  pymath {
+    # Support Python-based math functions
+    m4_include([[m4/stdinit.pymathm4]])
+    m4_include([[m4/stdfunc.pymathm4]])
+  
+    m4_include([[m4/x3d_vrml_textureprefix.pymathm4]])
+
+    # (can add custom math functions here)
+
+    pyinit contact_uv_project {[[
+      import numpy as np
+      import sys
+      import os
+      import traceback
+      import json
+      import copy
+
+      try:
+        from cStringIO import StringIO  # python 2.x
+        pass
+      except ImportError:
+        from io import StringIO # python 3.x
+        pass
+
+
+      from scipy.signal import hilbert
+
+      import dataguzzler as dg
+      import dg_metadata as dgm
+
+      from spatialnde.ndeobj import ndepart
+      from spatialnde.coordframes import coordframe,concrete_affine
+      from spatialnde.imageorthographic import imageorthographic_prepare_float,imageorthographic_float  
+      from spatialnde.dataguzzler.dg_3d import ndepartparams_from_landmarked3d,blank_uv_from_landmarked3d
+      
+      x3d_obj_cache={}
+
+      cached_uv_projection={}
+
+
+      def cache_uv_projection(x3d_vrml_channel,ndepartparams,specimenorientation,wfmdict,x3d_vrml_uvparam,contact_face):
+        # Read in the x3d model
+        #x3dbuf = StringIO(dgm.GetMetaDatumWIStr(x3d_vrml_channel,"X3DGeom",""))
+        #obj = ndepart.fromx3d(objframe,ndepartparams,x3dbuf)
+        (objframe,obj) = lookup_x3d_obj(x3d_vrml_channel,ndepartparams)
+
+        cameraframe=coordframe()
+
+
+        # Pose now provided as a parameter
+        Pose = specimenorientation.data
+
+        # Define relationship between coord frames
+        PoseXForm = concrete_affine.fromaugmented(objframe,cameraframe,Pose)
+      
+        paramwfm_template = blank_uv_from_landmarked3d(wfmdict,x3d_vrml_uvparam.Name)
+        # because this is a pymath function our real result needs
+        # to come from makeresult
+        #
+
+
+        validitybuf=np.zeros(paramwfm_template.data.shape,dtype='f',order="F")
+        #angleofincidencebuf=np.zeros(paramwfm_template.data.shape,dtype='f',order="F")
+
+        parameterizationdict=dict([ (id(surface),(None,paramwfm_template.data.T,validitybuf.T)) for surface in obj.implpart.surfaces ]) # used to have angleofincidencebuf.T
+
+
+	# See comment at start of evaluate_zbuffer_orthographic in imageprojection_ops.h for definition of orthographic_proj_matrix
+	IniVal1=dgm.GetMetaDatumWIDbl(contact_face,"IniVal1",0.0)
+	Step1=dgm.GetMetaDatumWIDbl(contact_face,"Step1",1.0)
+	IniVal2=dgm.GetMetaDatumWIDbl(contact_face,"IniVal2",0.0)
+	Step2=dgm.GetMetaDatumWIDbl(contact_face,"Step2",1.0)
+	
+	orthographic_proj_matrix=np.array( ((1.0/Step1, 0, -IniVal1*1.0/Step1),
+					    (0, 1.0/Step2, -IniVal2*1.0/Step2)),dtype='d')
+
+        # Perform z-buffering
+        projparams=imageorthographic_prepare_float(orthographic_proj_matrix,cameraframe,[ obj ],parameterizationdict,contact_face.data.shape[:2])
+
+        cacheindex=(x3d_vrml_channel.Name,x3d_vrml_channel.wfmrevision,x3d_vrml_uvparam.Name,x3d_vrml_uvparam.wfmrevision,contact_face.data.shape[:2],dgm.GetMetaDatumWIDbl(contact_face,"IniVal1",0.0),dgm.GetMetaDatumWIDbl(contact_face,"Step1",1.0),dgm.GetMetaDatumWIDbl(contact_face,"IniVal2",0.0),dgm.GetMetaDatumWIDbl(contact_face,"Step2",1.0),repr(specimenorientation.data))
+
+        cached_uv_projection[cacheindex]=(paramwfm_template,validitybuf,projparams)
+        pass
+
+
+      def lookup_x3d_obj(channeldep,ndepartparams):
+        index = (channeldep.Name,channeldep.wfmrevision,json.dumps(ndepartparams))
+        if index in x3d_obj_cache:
+          return x3d_obj_cache[index]
+        else:
+          x3dbuf = StringIO(dgm.GetMetaDatumWIStr(channeldep,"X3DGeom",""))
+	  objframe=coordframe()
+          obj = ndepart.fromx3d(objframe,ndepartparams,x3dbuf)
+	  x3d_obj_cache[index]=(objframe,obj)
+	  return (objframe,obj)
+        pass
+
+
+    ]]}
+
+    pyfunc contact_uv_project.transducer_face_image(weightedwfm:dep,diameter_mm:float,pixels_per_mm:float) {[[
+      # Build image of the transducer face:
+      # sequence of 3 frame sequences:
+      #  * real part
+      #  * imaginary part
+      #  * validity
+
+      # total width: 2*diameter
+      # validity shape: exp(-r^2/(diameter/3)^2)
+
+      # weightedwfm is actually 3 waveforms: real part, imaginary part, validity
+
+      if np.prod(weightedwfm.dimlen)==0 or len(weightedwfm.dimlen) != 2 or weightedwfm.dimlen[1] !=3:
+        # blank input; just return
+        reswfm=makeresult(ModData,0,(1,))
+        return reswfm
+
+      npixels=int(np.round(pixels_per_mm*diameter_mm))*2 # npixels shall be even
+      reswfm=makeresult(ModData,0,(npixels,npixels,3,weightedwfm.data.shape[0]))
+
+
+      # Compute validity image
+      x=(np.arange(npixels,dtype='d')-npixels/2)/pixels_per_mm
+      y=(np.arange(npixels,dtype='d')-npixels/2)/pixels_per_mm
+      r2=x[:,np.newaxis]**2 + y[np.newaxis,:]**2
+
+      validity = np.exp(-r2/((diameter_mm/3.0)**2))
+
+      # first element is real signal
+      reswfm.data[:,:,0,:]=weightedwfm.data[np.newaxis,np.newaxis,:,0]
+      # 2nd element is imaginary signal
+      reswfm.data[:,:,1,:]=weightedwfm.data[np.newaxis,np.newaxis,:,1]
+      # 3rd element is validity -- our radial validity image times the input validity
+      reswfm.data[:,:,2,:]=validity[:,:,np.newaxis]*weightedwfm.data[:,2].mean()
+
+
+      # Assign metadata
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("IniVal1",x[0]*1e-3))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("Step1",1.0e-3/pixels_per_mm))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("Units1","m"))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("Coord1","X Position"))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("IniVal2",y[0]*1e-3))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("Step2",1.0e-3/pixels_per_mm))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("Units2","m"))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("Coord2","Y Position"))
+
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("IniVal4",dgm.GetMetaDatumWIDbl(weightedwfm,"IniVal1",0.0)))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("Step4",dgm.GetMetaDatumWIDbl(weightedwfm,"Step1",1.0)))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("Units4",dgm.GetMetaDatumWIStr(weightedwfm,"Units1","s")))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("Coord4",dgm.GetMetaDatumWIStr(weightedwfm,"Coord1","Time")))
+
+
+      return reswfm
+    ]]}
+    
+    pyfunc contact_uv_project.accum_uv_projection(accumulation:dep,contact_face:dep,x3d_vrml_uvparam:dep,specimenorientation:dep,x3d_vrml_channel:dep) {[[
+      # accumulation is the self-dependency. uv_proj is a ncols x nrows x 2  frame from accumulable_uv_projection
+      # Result will have 4 axex: (u,v,3rd_axis,time)
+      # index[0] of the 3rd axis is the real projection data
+      # index[1] of the 3rd axis is the imaginary projection data (from Hilbert transform)
+      # index[2] of the 3rd axis is the validitybuf
+
+
+      # if we already have perfectly good data, but contact_face is blank, keep our perfectly good data
+      if np.prod(accumulation.dimlen) > 1 and accumulation.ndim >= 1 and np.prod(contact_face.dimlen) <=1:
+        paramwfm=makeresult(ModData,0,accumulation.dimlen)
+        paramwfm.data[:,:,:]=accumulation.data
+        paramwfm.MetaData=copy.deepcopy(accumulation.MetaData)
+        return paramwfm
+
+      if np.prod(x3d_vrml_channel.dimlen) < 1 or np.prod(x3d_vrml_uvparam.dimlen) < 1 or np.prod(contact_face.dimlen)< 1 or x3d_vrml_uvparam.ndim < 2 or contact_face.ndim < 2 or (not "X3DGeom" in x3d_vrml_channel.MetaData) or np.prod(specimenorientation.dimlen) < 16:
+        # if len(x3d_filename) < 1 or np.prod(x3d_vrml_uvparam.dimlen) < 1 or np.prod(undistorted_with_metadata.dimlen)< 1 or x3d_vrml_uvparam.ndim < 2 or undistorted_with_metadata.ndim < 2: 
+        # Inputs are blank; just return
+        paramwfm=makeresult(ModData,0,(1,))
+        return paramwfm      
+
+
+
+      wfmdict={}
+      wfmdict[x3d_vrml_channel.Name]=x3d_vrml_channel
+      wfmdict[x3d_vrml_uvparam.Name]=x3d_vrml_uvparam
+      wfmdict[contact_face.Name]=dg.wfminfo()
+      wfmdict[contact_face.Name].ndim=2
+      wfmdict[contact_face.Name].dimlen=contact_face.dimlen[:2]
+
+      ndepartparams=ndepartparams_from_landmarked3d(wfmdict, [ x3d_vrml_uvparam.Name ])
+
+      cacheindex=(x3d_vrml_channel.Name,x3d_vrml_channel.wfmrevision,x3d_vrml_uvparam.Name,x3d_vrml_uvparam.wfmrevision,contact_face.data.shape[:2],dgm.GetMetaDatumWIDbl(contact_face,"IniVal1",0.0),dgm.GetMetaDatumWIDbl(contact_face,"Step1",1.0),dgm.GetMetaDatumWIDbl(contact_face,"IniVal2",0.0),dgm.GetMetaDatumWIDbl(contact_face,"Step2",1.0),repr(specimenorientation.data))
+
+      if cacheindex not in cached_uv_projection:
+        cache_uv_projection(x3d_vrml_channel,ndepartparams,specimenorientation,wfmdict,x3d_vrml_uvparam,contact_face)  
+        pass
+
+      (paramwfm_template,validitybuf,projparams)=cached_uv_projection[cacheindex]
+
+      paramwfm=makeresult(ModData,0,(paramwfm_template.data.shape[0],paramwfm_template.data.shape[1],3,contact_face.dimlen[3]))
+      paramwfm.MetaData=copy.deepcopy(paramwfm_template.MetaData)
+
+      dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("IniVal4",dgm.GetMetaDatumWIDbl(contact_face,"IniVal4",0.0)))
+      dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Step4",dgm.GetMetaDatumWIDbl(contact_face,"Step4",1.0)))
+      dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Units4",dgm.GetMetaDatumWIStr(contact_face,"Units4","s")))
+      dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Coord4",dgm.GetMetaDatumWIStr(contact_face,"Coord4","Time")))
+
+      if (len(accumulation.data.shape)==4 and
+          paramwfm.data.shape[0]==accumulation.data.shape[0] and
+          paramwfm.data.shape[1]==accumulation.data.shape[1] and
+	  paramwfm.data.shape[2]==accumulation.data.shape[2] and
+	  paramwfm.data.shape[3]==accumulation.data.shape[3] and
+	  dgm.GetMetaDatumWIDbl(contact_face,"IniVal4",0.0) == dgm.GetMetaDatumWIDbl(accumulation,"IniVal4",0.0) and
+	  dgm.GetMetaDatumWIDbl(contact_face,"Step4",1.0) == dgm.GetMetaDatumWIDbl(accumulation,"Step4",1.0) and
+	  dgm.GetMetaDatumWIStr(contact_face,"Units4","s") == dgm.GetMetaDatumWIStr(accumulation,"Units4","s") or
+	  dgm.GetMetaDatumWIStr(contact_face,"Coord4","Time") == dgm.GetMetaDatumWIStr(accumulation,"Coord4","Time")):
+        # Prior data compatible:
+        paramwfm.data[::]=accumulation.data
+        pass
+      else:
+        paramwfm.data[::]=0.0
+        pass
+	
+      # Iterate over each time
+      for cnt in range(contact_face.dimlen[3]):
+        # project real part
+	wfmdict[contact_face.Name].data=contact_face.data[:,:,0,cnt]
+
+
+	# !!!*** Should be possible to do this without so much copying!!!
+
+	# Project real part
+	paramwfm_template.data[::] = paramwfm.data[:,:,0,cnt]
+	validitybuf[::]=paramwfm.data[:,:,2,cnt]
+	imageorthographic_float(projparams,contact_face.data[:,:,0,cnt],np.ascontiguousarray(contact_face.data[:,:,2,cnt]))
+	paramwfm.data[:,:,0,cnt]=paramwfm_template.data
+
+	# Project imaginary part, saving validitybuf
+	paramwfm_template.data[::] = paramwfm.data[:,:,1,cnt]
+	validitybuf.data[::]=paramwfm.data[:,:,2,cnt]
+	imageorthographic_float(projparams,contact_face.data[:,:,1,cnt],np.ascontiguousarray(contact_face.data[:,:,2,cnt]))
+	paramwfm.data[:,:,1,cnt]=paramwfm_template.data
+	paramwfm.data[:,:,2,cnt]=validitybuf
+
+	pass
+
+
+      # Generate appropriate metadata
+
+      return paramwfm
+
+
+    ]]}
+
+    pyfunc contact_uv_project.uv_projection_hilmag(accumulation:dep) {[[
+      # Generate waveform showing the weighted magnitude of the Hilbert
+      # transform (sqrt((real/validity)^2+(imag/validity)^2))
+      # i.e. sqrt(real^2+imag^2)/validity
+
+      if (accumulation.ndim < 4 or np.prod(accumulation.dimlen) <= 1):
+        paramwfm=makeresult(ModData,0,(1,))
+        paramwfm.data[::]=np.NaN
+        return paramwfm
+
+
+      paramwfm=makeresult(ModData,0,(accumulation.data.shape[0],accumulation.data.shape[1],accumulation.data.shape[3]))
+      paramwfm.data[:,:,:]=np.sqrt(accumulation.data[:,:,0,:]**2 + accumulation.data[:,:,1,:]**2)/accumulation.data[:,:,2,:]
+      paramwfm.MetaData=copy.deepcopy(accumulation.MetaData)
+      return paramwfm
+
+    ]]}
+
+    pyfunc contact_uv_project.cscanimg(accumulation:dep,t1_us:float,t2_us:float) {[[
+      # Generate waveform showing the peak of the Hilbert
+      # transform between t1 and t2
+      # i.e. sqrt(real^2+imag^2)/validity
+
+      if (accumulation.ndim < 4 or np.prod(accumulation.dimlen) <= 1):
+        paramwfm=makeresult(ModData,0,(1,))
+        paramwfm.data[::]=np.NaN
+        return paramwfm
+
+      t0=dgm.GetMetaDatumWIDbl(accumulation,"IniVal4",0.0)
+      dt=dgm.GetMetaDatumWIDbl(accumulation,"Step4",1.0)
+
+      tbase=t0+np.arange(accumulation.data.shape[3],dtype='d')*dt
+      t1t2range = (tbase >= t1_us*1e-6) & (tbase <= t2_us*1e-6)
+
+      paramwfm=makeresult(ModData,0,(accumulation.data.shape[0],accumulation.data.shape[1]))
+      paramwfm.data[:,:]=np.max(np.sqrt(accumulation.data[:,:,0,t1t2range]**2 + accumulation.data[:,:,1,t1t2range]**2)/accumulation.data[:,:,2,t1t2range],axis=2)
+      paramwfm.MetaData=copy.deepcopy(accumulation.MetaData)
+      return paramwfm
+
+    ]]}
+
+  
+
+    pyinit ut_signal_proc {[[
+      import numpy as np
+      import sys
+      import os
+      import traceback
+      import copy
+      import dg_metadata as dgm
+
+      from scipy.signal import hilbert
+
+    ]]}
+    # Delay line echo rationale
+    # Reference waveform corresponds to 100% echo from zero impedance
+    # R = Z1-Z2/(Z1+Z2) where Z2=0 -> R=Z1/Z1 = 1
+    #
+    # Measure reflection energy from reference waveform Rer = int |R^2| dt 
+    # Reflection energy from measurement waveform Re = int |R^2| dt
+    # Reflection energy coefficient = Re/Rer
+    #
+    # Transmission energy coefficient = 1-Re/Rer
+    # Transmission amplitude coefficient = sqrt(1-Re/Rer)
+    #
+    # But wave has to be transmitted back again into delay
+    # line to get recieved
+    # Echo amplitude coefficient = 1-Re/Rer
+    # Scale transmitted wave by 1/Echo amplitude coefficient
+    # but also use echo amplitude coefficient as a validity factor
+
+    pyfunc ut_signal_proc.eval_weighting(rawwfm:dep,no_contact_refwfm:dep,dlecho_t1_us:float,dlecho_t2_us:float) {[[
+      # Returned waveform is (Real part, imaginary part, validity coefficient)
+      # But it appears like a single waveform because it is a ProcExpr
+
+      if np.prod(rawwfm.dimlen)==0 or len(rawwfm.dimlen) != 1 or np.prod(no_contact_refwfm)==0 or len(no_contact_refwfm.dimlen) != 1 or rawwfm.dimlen[0] != no_contact_refwfm.dimlen[0]:
+        # blank or incompatible input; just return
+        reswfm=makeresult(ModData,0,(1,))
+        return reswfm
+	
+      reswfm=makeresult(ModData,0,(rawwfm.data.shape[0],3))
+      # reswfm[:,0] = real part
+      # reswfm[:,1] = imag part
+      # reswfm[:,2] = validity weighting coeff
+      # Compute hilbert transform of ultrasonic signal
+
+      t0=dgm.GetMetaDatumWIDbl(rawwfm,"IniVal1",0.0)
+      dt=dgm.GetMetaDatumWIDbl(rawwfm,"Step1",1.0)
+
+      analytic = hilbert(rawwfm.data)
+
+      refwfm_analytic = hilbert(no_contact_refwfm.data)
+
+      tbase=t0+np.arange(rawwfm.data.shape[0],dtype='d')*dt
+      t1t2range = (tbase >= dlecho_t1_us*1e-6) & (tbase <= dlecho_t2_us*1e-6)
+
+      # Integrate square of delay line echo from t1...t2
+      refwfm_dlecho = np.sum(np.abs(refwfm_analytic[t1t2range])**2)*dt;
+      rawwfm_dlecho = np.sum(np.abs(analytic[t1t2range])**2)*dt;
+      
+      # Echo amplitude coefficient
+      EAC = 1-rawwfm_dlecho/refwfm_dlecho
+
+      # Scale waveform to equalize echo response
+      scaled=analytic/EAC
+
+      validity = EAC
+
+      validity_threshold = 0.4
+
+      # mask out very small validity completely
+      if validity < 0.1:
+        validity=0.0
+	pass
+      # ramp validity down for small EAC by squaring it
+      elif validity < validity_threshold:
+        validity=validity**2/validity_threshold
+	pass
+	
+      result = scaled*validity
+
+      
+
+      # first element is real signal
+      reswfm.data[:,0]=result.real
+      # 2nd element is imaginary signal
+      reswfm.data[:,1]=result.imag
+      # 3rd element is validity
+      reswfm.data[:,2]=validity
+
+      reswfm.MetaData=copy.deepcopy(rawwfm.MetaData)
+
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("ProcNDim",1))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("ProcDimLen1",reswfm.data.shape[0]))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("ProcExpr","return sqrt(entry(Index1,0)*entry(Index1,0)+entry(Index1,1)*entry(Index1,1));")) # /entry(Index1,2)!@
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("ProcIniVal1",dgm.GetMetaDatumWIDbl(reswfm,"IniVal1",1.0)))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("ProcStep1",dgm.GetMetaDatumWIDbl(reswfm,"Step1",0.0)))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("ProcUnits1",dgm.GetMetaDatumWIStr(reswfm,"Units1","s")))
+      dgm.AddMetaDatumWI(reswfm,dgm.MetaDatum("ProcCoord1",dgm.GetMetaDatumWIStr(reswfm,"Coord1","s")))
+
+      return reswfm
+    ]]}
+  }
+}
+
+
+
+
+m4_include([[m4/specimenorientation.confhm4]])
+
+m4_define([[UTCHANPREFIX]],[[UT]])
+
+
+# Put oscilloscope within a subprocess
+# because it eats up a lot of mainloop time doing its transfers
+
+module osc("modules/subproc.so") {
+  main {
+    TCPPort=1651   # export by tcp so oscwfm below can access
+  }
+  library "libraries/wfmstore.so"  { }
+  module ..("modules/parentcmd.so") {}
+  module auth("modules/auth.so") {
+  	AuthCode(localhost) = "xyzzy"
+	AuthCode(127.0.0.1/32) = "xyzzy"
+	AuthCode([::1]/128) = "xyzzy"
+  } 
+  module wfm("modules/wfmio.so") {}
+  module osc("modules/tekscope.so") {
+    #uri="usbtmc:///dev/usbtmc0:debug"
+    uri="usbtmc:///dev/usbtmc0"
+    scopechannel=CH1
+    PollDelay=100 ms
+    wfmresponsebufsize=1000000
+    wfmname=UTCHANPREFIX[[_raw]]
+  }
+  
+}
+
+# With the oscilloscope in a subprocess, we need
+# access to its waveforms
+module oscwfm("modules/remotewfm.so") {
+  uri="tcp://localhost:1651"  # remotewfm is synchronous but runs in a sub-thread
+  authcode="xyzzy"
+  prefix=""
+  calcsync=true
+  allflag=true
+}
+
+main {
+
+  initcommand="math:def UTCHANPREFIX[[_weighted]]=ut_signal_proc.eval_weighting(UTCHANPREFIX[[_raw]],UTCHANPREFIX[[_nocontact]],DLECHO_START_US,DLECHO_END_US)"
+  initcommand="math:def UTCHANPREFIX[[_Unprojected]]=contact_uv_project.transducer_face_image(UTCHANPREFIX[[_weighted]],TRANSDUCERDIAMETER_MM,TRANSDUCER_PIXEL_SZ_MM)"
+  initcommand="math:def [[Accum]]UTCHANPREFIX[[_]]OBJ[[_accumtex]]=contact_uv_project.accum_uv_projection([[Accum]]UTCHANPREFIX[[_]]OBJ[[_accumtex]],UTCHANPREFIX[[_Unprojected]],OBJ[[_tex]],[[Pose_]]OBJ,OBJ)"
+
+
+  initcommand="math:def [[Accum]]UTCHANPREFIX[[_]]OBJ[[_tex]]=contact_uv_project.uv_projection_hilmag([[Accum]]UTCHANPREFIX[[_]]OBJ[[_accumtex]])"
+  initcommand="math:def [[CScan]]UTCHANPREFIX[[_]]OBJ[[_tex]]=contact_uv_project.cscanimg([[Accum]]UTCHANPREFIX[[_]]OBJ[[_accumtex]],CSCAN_GATE_START_US,CSCAN_GATE_END_US)"
+  initcommand="math:def [[ProjAccum]]UTCHANPREFIX[[_]]OBJ=x3d_vrml_textureprefix.textureprefix([[Accum]]UTCHANPREFIX[[_]]OBJ[[_tex]],OBJ,'[[Accum]]UTCHANPREFIX[[_]]')"
+  initcommand="math:def [[ProjCScan]]UTCHANPREFIX[[_]]OBJ=x3d_vrml_textureprefix.textureprefix([[CScan]]UTCHANPREFIX[[_]]OBJ[[_tex]],OBJ,'[[CScan]]UTCHANPREFIX[[_]]')"
+  
+
+}
+

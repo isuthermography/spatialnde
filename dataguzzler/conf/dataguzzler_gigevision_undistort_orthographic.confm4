@@ -1,0 +1,92 @@
+# dataguzzler_gigevision_undistort_orthographic.confm4 usage: 
+#     dataguzzler dataguzzler_gigevision_undistort_orthographic.confm4 ETH=<InterfaceIP> 
+# e.g. dataguzzler dataguzzler_gigevision_undistort_orthographic.confm4 ETH=192.168.23.4
+
+# or
+#     dataguzzler dataguzzler_gigevision_undistort_orthographic.confm4 ETH=
+#     (for link-local auto-probe)
+#    Dataguzzler: A Platform for High Performance Laboratory Data Acquisition 
+#    Copyright (C) 2005-2006 Iowa State University
+#
+
+# INSTRUCTIONS:
+#  1. Enter XY size of specimen e.g. XYSIZE_MM (163.0,103.0)
+#  2. Enter desired XY size of pixels in transformed images
+#     e.g. PIXELSIZE_MM (1.0,1.0)
+#  3. Click at minimum X, minimum Y corner of image in scope
+#     on IRimgUncorrected channel. Enter MINX_MINY and paste
+#     with the middle mouse button
+#  4. Repeat previous step for MINX_MAXY, MAXX_MAXY, and MAXX_MINY
+#  5. View GEV channel
+
+
+m4_include(`m4/stddef.confhm4')
+
+m4_define([[CAMERACALIB]],[['/dataawareness/Camera_Calibration_files/SpatialCalibration_GEV0828_20150614.cic']])
+m4_define([[IMGCHANPREFIX]],[[GEV]])
+
+
+m4_include([[m4/stdlib.confhm4]])
+m4_include([[m4/dg_python_pygram.confhm4]])
+
+# additional parameters for dg_python (also configured above)
+library "libraries/dg_python.so" {
+  
+  landmarks_mathchan="GEVUncorrected"
+  fiducials_mathchan="GEVUncorrected"
+}
+
+m4_include([[m4/stdmod.confhm4]])
+
+module math("modules/wfmmath.so") {  
+  numthreads = 2 # -1 would mean use number of CPU's + 1 
+  debugmode = true
+
+  pymath {
+    # Support Python-based math functions
+    m4_include([[m4/stdinit.pymathm4]])
+    m4_include([[m4/stdfunc.pymathm4]])
+  
+    m4_include([[m4/undistort_intrinsic.pymathm4]])
+    m4_include([[m4/orthographic_correction.pymathm4]])
+
+    # (can add custom math functions here)
+  }
+}
+
+main {
+  initcommand="math:def GEVUncorrected=undistort_intrinsic.undistort_intrinsic(GEVDistortedUncorrected,CAMERACALIB,1.2)"
+  initcommand="math:def GEV=orthographic_correction.orthographic_correction(GEVUncorrected)"
+}
+
+module icapt("modules/gevcapture.so") {
+	# device parameters
+
+	# Framebuffer parameters
+        FBElementSize=100000
+        FBNumElements=500
+
+	# RequestPktSize=4000
+	InterfaceIP="ETH"
+
+	# Set pixel format to 8-bit mono
+	GenICam(PixelFormat,IString)="Mono8"
+
+
+	# Ability to set/query VideoMode for point grey cameras
+	GenICamCommand(VIDEOMODE,VideoMode,IString)
+
+        channelname="GEVDistortedUncorrected" # Name of the dataguzzler channel
+
+	calcsync=true # don't allow new acquisitions until previous done processing
+	discardtopline=false
+	flipimg=false
+
+}
+
+
+
+m4_include([[m4/orthographic_corners_size.confhm4]])
+
+m4_include([[m4/fiducials.confhm4]])
+m4_include([[m4/landmarks.confhm4]])

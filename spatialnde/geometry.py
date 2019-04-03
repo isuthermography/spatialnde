@@ -1,0 +1,338 @@
+import sys
+import numpy as np
+
+# sign_nonzero = lambda x: np.heaviside(x,1.0)*2.0-1.0
+sign_nonzero = lambda x: -(np.signbit(x)*2.0)+1.0
+
+def vertex_all_in_set(vertexids,vertexset):
+    for vertexid in vertexids:
+        if vertexid < 0:
+            return True
+        elif vertexid not in vertexset:
+            return False
+        pass
+    return True
+
+
+
+def point_in_polygon_2d(vertices_rel_point):
+    
+    # Apply winding number algorithm.
+    # This algorithm is selected -- in its most simple form --
+    # because it is so  simple and robust in the case of the
+    # intersect point being on or near the edge. It may well
+    # be much slower than optimal. It tries to return True
+    # in the edge case. 
+    
+    # Should probably implement a faster algorithm then drop
+    # down to this for the special cases.
+
+    # See Hormann and Agathos, The point in polygon problem
+    # for arbitrary polygons, Computational Geometry 20(3) 131-144 (2001)
+    # http://dx.doi.org/10.1016/S0925-7721(01)00012-8
+    # https://pdfs.semanticscholar.org/e90b/d8865ddb7c7af2b159d413115050d8e5d297.pdf
+    
+    # Winding number is sum over segments of
+    # acos((point_to_vertex1 dot point_to_vertex2)/(magn(point_to_vertex1)*magn(point_to_vertex_2))) * sign(det([ point_to_vertex1  point_to_vertex2 ]))
+    # where sign(det) is really: What is the sign of the z
+    # component of (point_to_vertex1 cross point_to_vertex2)
+        
+    # Special cases: magn(point_to_vertex1)==0 or
+    #  magn_point_to_vertex2   -> point is on edge
+    # det([ point_to_vertex1  point_to_vertex2 ]) = 0 -> point may be on edge
+    
+    windingnum=0.0;
+    numvertices=vertices_rel_point.shape[0]
+    
+    for VertexCnt in range(numvertices):
+        
+        NextVertex=VertexCnt+1
+        if NextVertex==numvertices:
+            # final vertex... loop back to the start
+            NextVertex=0
+            pass
+        
+        # calculate (thisvertex - ourpoint) -> vec1
+        vec1=vertices_rel_point[VertexCnt,:]
+        magn1=np.linalg.norm(vec1)
+        
+        
+        # calculate (nextvertex - ourpoint) -> vec2
+        vec2=vertices_rel_point[NextVertex,:]
+        magn2=np.linalg.norm(vec2)
+
+        if (magn1==0.0 or magn2==0.0):
+            # Got it!!!
+            return True
+        
+        vec1=vec1/magn1
+        vec2=vec2/magn2
+        
+        det=vec1[0]*vec2[1]-vec2[0]*vec1[1] # matrix determinant
+        
+        cosparam=(vec1[0]*vec2[0]+vec1[1]*vec2[1]) #  /(magn1*magn2);
+        
+        if cosparam < -1.0:
+            # Shouldn't be possible...just in case of weird roundoff
+            cosparam=-1.0
+            pass
+        
+        if cosparam > 1.0:
+            # Shouldn't be possible...just in case of weird roundoff
+            cosparam=1.0
+            pass
+      
+        if det > 0:
+            windingnum += np.arccos(cosparam)
+            pass
+        elif det < 0:
+            windingnum -= np.arccos(cosparam);
+            pass
+        else: 
+            # det==0.0 
+                
+            # Vectors parallel or anti-parallel 
+            
+            if cosparam > 0.9:
+                # Vectors parallel. We are OUTSIDE. Do Nothing
+                pass
+            elif cosparam < -0.9:
+                # Vectors anti-parallel. We are ON EDGE */
+                return True
+            else: 
+                assert(0) # Should only be able to get cosparam = +/- 1.0 if abs(det) > 0.0 */
+                pass
+            pass
+        pass
+    
+        
+    
+    windingnum=abs(windingnum)*(1.0/(2.0*np.pi)) # divide out radians to number of winds; don't care about clockwise vs. ccw
+    if windingnum > .999 and windingnum < 1.001:
+        # Almost exactly one loop... got it! 
+        return True
+    elif windingnum >= .001:
+        #
+        sys.stderr.write("spatialnde.geometry.point_in_polygon_2d() Got weird winding number of %e; assuming inaccurate calculation on polygon edge\n" % (windingnum))
+        # Could also be self intersecting polygon 
+        # got it !!! 
+        return True
+    
+    # If we got this far, the search failed 
+    return False
+
+def point_in_polygon_3d(vertices,point,inplanemat):
+    """ assumes vertices are coplanar, with given orthonormal 2D basis inplanemat.  """
+    vert3d_rel_point = vertices-point[np.newaxis,:]
+    vert2d_rel_point = np.inner(vert3d_rel_point,inplanemat)
+
+    return point_in_polygon_2d(vert2d_rel_point)
+
+
+
+def segment_intersects_box(box_v0,box_v1,seg_v0,seg_v1):
+    # NOTE: box_v0 presumed to have lower coordinates than box_v1
+
+    # So we take the box and shift its center onto the segment. Then
+    # we slide its center up and down the segment
+
+    # Motivated by https://github.com/erich666/GraphicsGems/blob/master/gemsv/ch7-2/pcube.c
+    
+    
+    # The segment intersects the box if and only if the original box
+    # center lies inside the shape generated by sliding the box
+    # up and down the segment.
+
+    # This shape from sliding the box has 12 surfaces:
+    #   * 3 at each end of the slide
+    #   * 6 surrounding the slide
+
+    original_center = (box_v1+box_v0)/2.0
+    
+    segvec=seg_v1-seg_v0
+    box_width = box_v1-box_v0
+
+    seg_axisdirections = sign_nonzero(segvec)
+    
+    # Surfaces at v0 end of the slide
+    if (seg_v0*seg_axisdirections - box_width/2.0 > original_center*seg_axisdirections).any():
+        return False # outside shape
+
+    # Surfaces at v1 end of the slide
+    if (seg_v1*seg_axisdirections + box_width/2.0 < original_center*seg_axisdirections).any():
+        return False # outside shape
+
+    # Remaining six faces connect the two ends
+
+
+    for axis in range(3):
+
+        # surf_normal should be normal to axis
+        # and normal to segvec
+        axisvec=np.zeros(3,dtype='d')
+        axisvec[axis]=1
+
+        surf_normal = np.cross(axisvec,segvec)
+        sn_sign=sign_nonzero(surf_normal)
+
+        # surf_normal is normal
+        # to both the segment and the axis we
+        # are working on.
+
+        # So the plane normal to surf_normal
+        # is in the plane both of the axis
+        # we are working on and the segment
+
+        # So coordinate along segvec
+        # doesn't matter, and coordinate along
+        # axis doesn't matter.
+
+        # We want to see if original_center is
+        # within the (segment, offset by half the 
+        # the box width)
+
+        # i.e. if dot(seg_v0 + box_width/2.0*sn_sign,surf_normal) < dot(original_center,surf_normal)
+        # or dot(seg_v0 - box_width/2.0*sn_sign,surf_normal) > dot(original_center,surf_normal) ... Then it is outside
+        # i.e. if dot(seg_v0 - original_center, surf_normal) < dot(-box_width/2.0*sn_sign,surf_normal) 
+        # or dot(seg_v0 - original_center,surf_normal) > dot(box_width/2.0*sn_sign,surf_normal) ... Then it is outside
+        # i.e. if -dot(seg_v0 - original_center, surf_normal) > dot(box_width/2.0*sn_sign,surf_normal) 
+        # or dot(seg_v0 - original_center,surf_normal) > dot(box_width/2.0*sn_sign,surf_normal) ... Then it is outside
+        # i.e. if abs(dot(seg_v0 - original_center, surf_normal)) > dot(box_width/2.0*sn_sign,surf_normal) (r.h.s. is positive ... Then it is outside
+        
+        if np.abs(np.dot(seg_v0-original_center,surf_normal) ) > np.dot(box_width/2.0*sn_sign,surf_normal):
+            return False
+
+        pass
+    return True
+
+def polygon_intersects_box_3d(box_v0,box_v1,vertices,inplanemat,facetnormal):
+    """ Determine whether the given polygon intersects the given box,
+    with v0 coords assumed to be less than v1 coords. """
+    numvertices=vertices.shape[0]
+
+    # Do any of the polygon edges intersect the box ?
+    for startvertex in range(numvertices):
+        endvertex = (startvertex + 1) % numvertices
+        if segment_intersects_box(box_v0,box_v1,vertices[startvertex],vertices[endvertex]):
+            return True
+
+        pass
+    # so if none of the edges intersects, then a corner
+    # of the box might be penetrating the polygon.
+    #
+    # If so, the diagonal of the box that comes out that
+    # corner would have to intersect the polygon
+    #
+    # Also catches the case where the polygon is larger
+    # than the box and completely surrounds it
+
+    # ***!!!! BUG: box_v0 isn't a good place to start
+    # depending on the signs! ****
+    # * NOW FIXED by defining starting_corner and
+    # using it in place of box_v0
+    diagonalvec=sign_nonzero(facetnormal)*(box_v1-box_v0)
+
+    starting_corner=box_v0.copy()
+    starting_corner[sign_nonzero(facetnormal) < 0]=box_v1[sign_nonzero(facetnormal) < 0]
+    # So we just solve for where on the diagonal we intersect
+    # with the facet
+
+    # The facet is the plane where  R dot facetnormal has a particular value
+    #
+    # Find the value
+
+    # Rdotfacetnormal = np.inner(vertices[0,:],facetnormal)
+
+    # Now where does diagonalvec intersect the facet?
+    # Ray is defined by  R = starting_corner + t*diagonalvec
+    # for t=0..1
+    #
+    # Substitute this R into facet plane definition
+    # dot(starting_corner + t*diagonalvec, facetnormal) = Rdotfacetnormal
+    # dot(starting_corner,facetnormal) + dot(t*diagonalvec, facetnormal) = Rdotfacetnormal
+    # dot(starting_corner,facetnormal) + t*dot(diagonalvec, facetnormal) = Rdotfacetnormal
+    # t*dot(diagonalvec, facetnormal) = Rdotfacetnormal - dot(starting_corner,facetnormal)
+    # t = (Rdotfacetnormal - dot(starting_corner,facetnormal)/dot(diagonalvec, facetnormal)
+
+    t = np.inner(vertices[0,:] - starting_corner,facetnormal)/np.inner(diagonalvec,facetnormal)
+
+    if t > 1.0 or t < 0.0:
+        return False   # intersection is in wrong place along line
+
+    return point_in_polygon_3d(vertices,starting_corner + t*diagonalvec,inplanemat)
+
+
+
+def CCW(a,b,c):
+    # Returns True if in-plane coordinates a,b,c are in
+    # CCW order
+    # per http://jeffe.cs.illinois.edu/teaching/373/notes/x05-convexhull.pdf
+    # take cross product of ab with ac, if that
+    # cross product is positive, then we are CCW
+    return (np.cross(b-a,c-a) > 0.0)
+
+
+def check_lineseg_intersection(a,b,c,d):
+    # Check if the planar line segments ab and cd intersect
+    # Per http://jeffe.cs.illinois.edu/teaching/373/notes/x06-sweepline.pdf
+    # The segments intersect if and only if
+    #     endpoints a and b are on opposite sides of cd
+    #  and endpoints c and d are on opposite sides of ab
+    #
+    # a and b are on opposite sides of c and d if and only if 
+    # exactly one of (a,c,d) and (b,c,d) are CCW
+    #
+    # This is true if the counter clock wise ordering test passes
+    #  (CCW(a,c,d) != CCW(b,c,d)) and (CCW(a,b,c) != CCW(a,b,d))
+
+    # ... What if (a,b) and (c,d) are colinear? 
+    # ... Then the cross product is 0 and CCW returns False
+    # and they count as not intersecting
+    # ... That is probably reasonable in this application
+
+    return (CCW(a,c,d) != CCW(b,c,d)) and (CCW(a,b,c) != CCW(a,b,d))
+
+
+def box_inside_polygon_2d(box_v0,box_v1,vertices):
+
+    # Short circuit in case all of the vertices are on one side of a box plane
+    if (np.all(vertices[:,0] < box_v0[0]) or
+        np.all(vertices[:,0] > box_v1[0]) or
+        np.all(vertices[:,1] < box_v0[1]) or
+        np.all(vertices[:,1] > box_v1[1])):
+        return False
+    
+    # Find other box corners
+    box_v0b = np.array((box_v0[0],box_v1[1]),dtype='d')
+    box_v1b = np.array((box_v1[0],box_v0[1]),dtype='d')
+
+    return (point_in_polygon_2d(vertices - box_v0[np.newaxis,:] ) and
+            point_in_polygon_2d(vertices - box_v1[np.newaxis,:] ) and
+            point_in_polygon_2d(vertices - box_v0b[np.newaxis,:] ) and
+            point_in_polygon_2d(vertices - box_v1b[np.newaxis,:] ))
+
+    
+def polygon_intersects_box_2d(box_v0,box_v1,vertices):
+    # assumes coordinates of box_v0 < coordinates of box_v1
+    # Loop around all of the edges of this polygon
+    # WARNING: Does not consider either case of polygon completely
+    # inside box, or box completely inside polygon
+
+    # box_v0 and box_v1 are opposite corners
+    # Find other box corners
+    box_v0b = np.array((box_v0[0],box_v1[1]),dtype='d')
+    box_v1b = np.array((box_v1[0],box_v0[1]),dtype='d')
+
+    for vertexcnt in range(vertices.shape[0]):
+        nextvertex=(vertexcnt+1) % vertices.shape[0]
+        
+        # Compare with all of the edges of the box
+        if (check_lineseg_intersection(box_v0,box_v1b,vertices[vertexcnt,:],vertices[nextvertex,:]) or
+            check_lineseg_intersection(box_v1b,box_v1,vertices[vertexcnt,:],vertices[nextvertex,:]) or
+            check_lineseg_intersection(box_v1,box_v0b,vertices[vertexcnt,:],vertices[nextvertex,:]) or
+            check_lineseg_intersection(box_v0b,box_v0,vertices[vertexcnt,:],vertices[nextvertex,:])):
+            # Found intersection of this polygon with this box
+            return True
+                
+        pass
+    return False

@@ -1,0 +1,667 @@
+
+  pyinit uv_projection {[[
+    from lxml import etree
+    import sys
+    import os
+    import os.path
+    import copy
+    import numpy as np
+    import string
+    import struct
+    import cv2
+    import json
+    import resource
+    import traceback
+      
+    try:
+      from cStringIO import StringIO  # python 2.x
+      pass
+    except ImportError:
+      from io import StringIO # python 3.x
+      pass
+
+    import dg_metadata as dgm
+
+    from spatialnde.ndeobj import ndepart
+    from spatialnde.coordframes import coordframe,concrete_affine
+    from spatialnde.imageprojectionmodel import ImageProjectionModel
+    from spatialnde.dataset import SurfaceStructuredGridDataSet
+    from spatialnde.imageprojection import imageprojection_prepare_float,imageprojection_float  
+    from spatialnde.dataguzzler.dg_3d import ndepartparams_from_landmarked3d,blank_uv_from_landmarked3d
+
+    x3d_obj_cache={}
+
+    cached_uv_projection={}
+
+    def cache_uv_projection(x3d_vrml_channel,ndepartparams,specimenorientation,wfmdict,x3d_vrml_uvparam,undistorted_with_metadata,calibfile,imagedat,edgeblurriness,uv_weightingblur_distance):
+      # Read in the x3d model
+      #x3dbuf = StringIO(dgm.GetMetaDatumWIStr(x3d_vrml_channel,"X3DGeom",""))
+      #obj = ndepart.fromx3d(objframe,ndepartparams,x3dbuf)
+      (objframe,obj) = lookup_x3d_obj(x3d_vrml_channel,ndepartparams)
+
+      cameraframe=coordframe()
+
+
+      # Pose now provided as a parameter
+      Pose = specimenorientation.data
+
+      # Define relationship between coord frames
+      PoseXForm = concrete_affine.fromaugmented(objframe,cameraframe,Pose)
+      
+      paramwfm_template = blank_uv_from_landmarked3d(wfmdict,x3d_vrml_uvparam.Name)
+      # because this is a pymath function our real result needs
+      # to come from makeresult
+      #
+
+
+      projmodel = ImageProjectionModel.fromcalibfiledataguzzler(undistorted_with_metadata,calibfile,alphaoverride=1.0) # specify alphaoverride to indicate that undistortion has already been applied
+
+
+      validitybuf=np.zeros(paramwfm_template.data.shape,dtype='f',order="F")
+      #angleofincidencebuf=np.zeros(paramwfm_template.data.shape,dtype='f',order="F")
+
+      parameterizationdict=dict([ (id(surface),(None,paramwfm_template.data.T,validitybuf.T)) for surface in obj.implpart.surfaces ]) # used to have angleofincidencebuf.T
+
+      # Perform z-buffering
+      projparams=imageprojection_prepare_float(projmodel,cameraframe,[ obj ],parameterizationdict,imagedat,edgeblurriness,uv_weightingblur_distance)
+
+      cacheindex=(x3d_vrml_channel.Name,x3d_vrml_channel.wfmrevision,x3d_vrml_uvparam.Name,x3d_vrml_uvparam.wfmrevision,undistorted_with_metadata.data.shape,repr(specimenorientation.data))
+
+      cached_uv_projection[cacheindex]=(paramwfm_template,validitybuf,projparams)
+      pass
+
+
+    def lookup_x3d_obj(channeldep,ndepartparams):
+      index = (channeldep.Name,channeldep.wfmrevision,json.dumps(ndepartparams))
+      if index in x3d_obj_cache:
+        return x3d_obj_cache[index]
+      else:
+        x3dbuf = StringIO(dgm.GetMetaDatumWIStr(channeldep,"X3DGeom",""))
+	objframe=coordframe()
+        obj = ndepart.fromx3d(objframe,ndepartparams,x3dbuf)
+	x3d_obj_cache[index]=(objframe,obj)
+	return (objframe,obj)
+      pass
+
+    cached_poses={}
+    
+
+
+  ]]}
+
+  #pyfunc uv_projection.uv_projection(x3d_vrml_channel:dep,x3d_vrml_uvparam:dep,undistorted_with_metadata:dep,calibfile:string) {[[   #@qtconsole }
+
+  pyfunc uv_projection.solve_pnp_landmarks(undistorted_with_metadata:dep,x3d_vrml_uvparam:dep,x3d_vrml_channel:dep,calibfile:string) {[[  #@qtconsole
+    wfmdict={}
+    wfmdict[x3d_vrml_uvparam.Name]=x3d_vrml_uvparam
+    wfmdict[undistorted_with_metadata.Name]=undistorted_with_metadata
+
+    if np.prod(x3d_vrml_uvparam.dimlen) < 1 or np.prod(undistorted_with_metadata.dimlen) < 1 or x3d_vrml_uvparam.ndim < 2 or undistorted_with_metadata.ndim < 2 or "X3DGeom" not in x3d_vrml_channel.MetaData:
+      # if len(x3d_filename) < 1 or np.prod(x3d_vrml_uvparam.dimlen) < 1 or np.prod(undistorted_with_metadata.dimlen)< 1 or x3d_vrml_uvparam.ndim < 2 or undistorted_with_metadata.ndim < 2 or "X3DGeom" not in x3d_vrml_channel.MetaData: 
+      # Inputs are blank; just return
+      paramwfm=makeresult(ModData,0,(1,))
+      return paramwfm
+
+
+    dataset = SurfaceStructuredGridDataSet.fromdataguzzlerpixelimage(undistorted_with_metadata,wfmdict)
+
+
+    if len(dataset.landmarkpixelcoords) < 4:
+      # Need at least 4 landmarks to attempt solvePnP
+      paramwfm=makeresult(ModData,0,(1,))
+      return paramwfm      
+         
+    #objframe=coordframe()
+
+
+    pose_index=(x3d_vrml_channel.Name,x3d_vrml_channel.wfmrevision,x3d_vrml_uvparam.Name,x3d_vrml_uvparam.wfmrevision,undistorted_with_metadata.data.shape,json.dumps(dataset.landmarkpixelcoords))
+
+    if pose_index in cached_poses:
+      (projectedlandmarks,Pose)=cached_poses[pose_index]
+      pass
+    else: 
+      ndepartparams=ndepartparams_from_landmarked3d(wfmdict, [ x3d_vrml_uvparam.Name ])
+
+      # Read in the x3d model
+      #x3dbuf = StringIO(dgm.GetMetaDatumWIStr(x3d_vrml_channel,"X3DGeom",""))
+      #obj = ndepart.fromx3d(objframe,ndepartparams,x3dbuf)
+      (objframe,obj) = lookup_x3d_obj(x3d_vrml_channel,ndepartparams)
+
+      projmodel = ImageProjectionModel.fromcalibfiledataguzzler(undistorted_with_metadata,calibfile,alphaoverride=1.0) # specify alphaoverride to indicate that undistortion has already been applied
+
+      ## Fudge focal length in projmodel
+      #focal_length=750.0 # pixels
+      #projmodel.new_camera_mtx=np.array(((focal_length,0.0,320.0),
+      #                             (0.0,focal_length,240.0),
+      #                             (0.0,0.0,1.0)),dtype='d')
+      
+
+      # now we should be able to call projmodel.evaluaterelativepose
+      # NOTE: Errors from projmodel.evaluaterelativepose end up in metadata
+      # in the Pose_xxxx channel.
+      #   To view errors:  
+      # 1. Stop new frames
+      #   TRIGMODE TRIGGERED
+      # 2. Figure out revision of Pose channel
+      #   wfm:revision? Pose_<MODELNAME_WITH_UNDERSCORES>
+      # 3. Extract metadata of latest revision of Pose channel
+      #   wfm:metadata? Pose_<MODELNAME_WITH_UNDERSCORES> <REVISION>
+      try: 
+        (projectedlandmarks,Pose) = projmodel.evaluaterelativepose(obj,dataset)
+      except ValueError:
+        # raise
+        paramwfm=makeresult(ModData,0,(1,))
+	exc_info = sys.exc_info()[1:]
+        dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("ERROR",str(sys.exc_info()[0])+"\n"+traceback.format_exc()+"\n"))
+        return paramwfm              
+      cached_poses[pose_index]=(projectedlandmarks,Pose)
+
+      # Check if pose works
+      if False: # for qtconsole experimentation
+        PoseCopy=np.empty(Pose.shape,dtype='d')
+        PoseCopy[:,:]=Pose
+        # Fix 2nd and 3rd rows
+        PoseCopy[1,:]=-Pose[1,:]
+        PoseCopy[2,:]=-Pose[2,:]
+        testlandmark="KEXQET"
+        testlandmark="KEXQET"
+        testcoordsxyz=obj.implpart.surfaces[0].intrinsicparameterization.eval_xyz_uv(obj.implpart.surfaces[0],*obj.landmarks.landmarkdict2d[testlandmark][1:])
+        testcoords=np.inner(PoseCopy,np.r_[testcoordsxyz,1.0])
+        testcoords/=testcoords[2] # normalize by z coordinate
+
+        testpixelcoords=np.inner(projmodel.new_camera_mtx,testcoords[:3])
+        #print("testpixelcoords=%s" % (str(testpixelcoords)))
+        #print("datasetcoords=%s" % (str(dataset.landmarkpixelcoords[testlandmark])))	
+        pass
+      pass
+
+    posewfm=makeresult(ModData,0,(4,4))
+    posewfm.data[:,:]=Pose
+
+
+    for landmarkname in projectedlandmarks:
+      physcoords=dataset.pixelcoords2physcoords(projectedlandmarks[landmarkname])
+      dgm.AddMetaDatumWI(posewfm,dgm.MetaDatum("LANDMARK_%s_PROJECTED_X" % (landmarkname),physcoords[0]))
+      dgm.AddMetaDatumWI(posewfm,dgm.MetaDatum("LANDMARK_%s_PROJECTED_Y" % (landmarkname),physcoords[1]))
+      pass
+
+    return posewfm
+  ]]}
+
+  pyfunc uv_projection.image_with_projected_landmarks(undistorted_with_metadata:dep,specimenorientation:dep) {[[   #@qtconsole
+    # specimenorientation (posewfm, above) has metadata indicating projected landmark coordinates 
+    # Basically here we copy the raw input but merge the necessary metadata
+    # (ideally we wouldn't copy, just reference the input) 
+
+    if np.prod(undistorted_with_metadata.dimlen)==0:
+      # Inputs are blank; just return
+      paramwfm=makeresult(ModData,0,(1,))
+      return paramwfm      
+      
+
+    paramwfm=makeresult(ModData,0,undistorted_with_metadata.dimlen)
+    if len(undistorted_with_metadata.dimlen) > 0:
+      paramwfm.data[:,:]=undistorted_with_metadata.data
+      pass
+    paramwfm.MetaData=copy.deepcopy(undistorted_with_metadata.MetaData)
+
+    if len(specimenorientation.dimlen) > 1 and np.prod(specimenorientation.dimlen) > 0:
+      # if we have an evaluated specimenorientation, pass the pose metadata (i.e. projected landmark coordinates)
+      paramwfm.MetaData.update(specimenorientation.MetaData)
+      pass
+    return paramwfm
+
+  ]]}
+
+  pyfunc uv_projection.uv_projection(undistorted_with_metadata:dep,x3d_vrml_uvparam:dep,specimenorientation:dep,x3d_vrml_channel:dep,calibfile:string) {[[   #@qtconsole
+
+    #calibfile="sc6000_1009_calib.cic"
+    #sys.stderr.write("pt 1 memusage: %s\n" % (str(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)))
+
+
+    wfmdict={}
+    wfmdict[x3d_vrml_channel.Name]=x3d_vrml_channel
+    wfmdict[x3d_vrml_uvparam.Name]=x3d_vrml_uvparam
+    wfmdict[undistorted_with_metadata.Name]=undistorted_with_metadata
+
+    if np.prod(x3d_vrml_channel.dimlen) < 1 or np.prod(x3d_vrml_uvparam.dimlen) < 1 or np.prod(undistorted_with_metadata.dimlen)< 1 or x3d_vrml_uvparam.ndim < 2 or undistorted_with_metadata.ndim < 2 or (not "X3DGeom" in x3d_vrml_channel.MetaData) or np.prod(specimenorientation.dimlen) < 16:
+      # if len(x3d_filename) < 1 or np.prod(x3d_vrml_uvparam.dimlen) < 1 or np.prod(undistorted_with_metadata.dimlen)< 1 or x3d_vrml_uvparam.ndim < 2 or undistorted_with_metadata.ndim < 2: 
+      # Inputs are blank; just return
+      paramwfm=makeresult(ModData,0,(1,))
+      return paramwfm      
+
+
+    dataset = SurfaceStructuredGridDataSet.fromdataguzzlerpixelimage(undistorted_with_metadata,wfmdict)
+
+    ndepartparams=ndepartparams_from_landmarked3d(wfmdict, [ x3d_vrml_uvparam.Name ])
+
+    # Imagedat is the incoming image to be mapped
+    imagedat=dataset.data[:,:]   # This flips the physical orientation of the image from bottom-row-first to top-row-first
+    #imagedat=dataset.data[::10,::10]
+    imagedata=np.zeros((1,imagedat.shape[0],imagedat.shape[1]),dtype='f')
+    imagedata[0,:,:]=imagedat
+
+
+    cacheindex=(x3d_vrml_channel.Name,x3d_vrml_channel.wfmrevision,x3d_vrml_uvparam.Name,x3d_vrml_uvparam.wfmrevision,undistorted_with_metadata.data.shape,repr(specimenorientation.data))
+    #cacheindex=(x3d_filename,x3d_vrml_uvparam.Name,x3d_vrml_uvparam.wfmrevision,undistorted_with_metadata.data.shape,json.dumps(dataset.landmarkpixelcoords))
+    
+    if cacheindex not in cached_uv_projection:
+      cache_uv_projection(x3d_vrml_channel,ndepartparams,specimenorientation,wfmdict,x3d_vrml_uvparam,undistorted_with_metadata,calibfile,imagedat,3.0,.03) # 3.0 is guess of edge blurriness; .03 meters is guess of lateral heat conduction distance for uv weighting
+
+      pass
+
+    (paramwfm_template,validitybuf,projparams)=cached_uv_projection[cacheindex]
+
+       
+    paramwfm=makeresult(ModData,0,paramwfm_template.dimlen)
+    paramwfm.MetaData=copy.deepcopy(paramwfm_template.MetaData)
+
+
+    # Give it Coord3, Units3, IniVal3 copied from incoming data stream
+    # so math:def accum() can assemble a movie meaningfully 
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Coord3",dgm.GetMetaDatumWIStr(undistorted_with_metadata,"Coord3","Frame Number")))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Units3",dgm.GetMetaDatumWIStr(undistorted_with_metadata,"Units3","Unitless")))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("IniVal3",dgm.GetMetaDatumWIDbl(undistorted_with_metadata,"IniVal3",0.0)))
+
+
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("AmplCoord",dgm.GetMetaDatumWIStr(undistorted_with_metadata,"AmplCoord","Voltage")))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("AmplUnits",dgm.GetMetaDatumWIStr(undistorted_with_metadata,"AmplUnits","Volts")))
+      
+
+    # Clear output buffer
+    paramwfm_template.data[:,:]=0.0
+    
+    # clear validity buffer
+    validitybuf[:,:]=0.0
+
+    #sys.stderr.write("Starting projection...\n")
+    #sys.stderr.flush()
+    imageprojection_float(projparams,imagedata) # project into paramwfm_template
+
+    #sys.stderr.write("Finished projection\n")
+    #sys.stderr.flush()
+    paramwfm.data[:,:]=paramwfm_template.data/validitybuf
+    
+
+    return paramwfm
+
+  ]]}
+
+
+
+
+  pyfunc uv_projection.accumulable_uv_projection(undistorted_with_metadata:dep,x3d_vrml_uvparam:dep,specimenorientation:dep,x3d_vrml_channel:dep,calibfile:string) {[[   #@qtconsole
+
+
+
+    wfmdict={}
+    wfmdict[x3d_vrml_channel.Name]=x3d_vrml_channel
+    wfmdict[x3d_vrml_uvparam.Name]=x3d_vrml_uvparam
+    wfmdict[undistorted_with_metadata.Name]=undistorted_with_metadata
+
+    if np.prod(x3d_vrml_channel.dimlen) < 1 or np.prod(x3d_vrml_uvparam.dimlen) < 1 or np.prod(undistorted_with_metadata.dimlen)< 1 or x3d_vrml_uvparam.ndim < 2 or undistorted_with_metadata.ndim < 2 or (not "X3DGeom" in x3d_vrml_channel.MetaData) or np.prod(specimenorientation.dimlen) < 16:
+      # if len(x3d_filename) < 1 or np.prod(x3d_vrml_uvparam.dimlen) < 1 or np.prod(undistorted_with_metadata.dimlen)< 1 or x3d_vrml_uvparam.ndim < 2 or undistorted_with_metadata.ndim < 2: 
+      # Inputs are blank; just return
+      paramwfm=makeresult(ModData,0,(1,))
+      return paramwfm      
+
+
+    dataset = SurfaceStructuredGridDataSet.fromdataguzzlerpixelimage(undistorted_with_metadata,wfmdict)
+
+    ndepartparams=ndepartparams_from_landmarked3d(wfmdict, [ x3d_vrml_uvparam.Name ])
+
+    # Imagedat is the incoming image to be mapped
+    imagedat=dataset.data[:,:]
+    #imagedat=dataset.data[::10,::10]
+    imagedata=np.zeros((1,imagedat.shape[0],imagedat.shape[1]),dtype='f')
+    imagedata[0,:,:]=imagedat
+
+
+    cacheindex=(x3d_vrml_channel.Name,x3d_vrml_channel.wfmrevision,x3d_vrml_uvparam.Name,x3d_vrml_uvparam.wfmrevision,undistorted_with_metadata.data.shape,repr(specimenorientation.data))
+    #cacheindex=(x3d_filename,x3d_vrml_uvparam.Name,x3d_vrml_uvparam.wfmrevision,undistorted_with_metadata.data.shape,json.dumps(dataset.landmarkpixelcoords))
+    
+    if cacheindex not in cached_uv_projection:
+      cache_uv_projection(x3d_vrml_channel,ndepartparams,specimenorientation,wfmdict,x3d_vrml_uvparam,undistorted_with_metadata,calibfile,imagedat,3.0,.03)  # 3.0 pixels is guess of edge blurriness; .03 meters is guess of lateral heat conduction distance for uv weighting
+      pass
+
+    (paramwfm_template,validitybuf,projparams)=cached_uv_projection[cacheindex]
+      
+     
+    
+      
+    paramwfm=makeresult(ModData,0,np.concatenate((paramwfm_template.dimlen,np.array((2,),dtype=np.int64))))
+    # result waveform has 2 frames:
+    #  1. Data buffer frame
+    #  2. Validity buffer frame
+    paramwfm.MetaData=copy.deepcopy(paramwfm_template.MetaData)
+
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("AmplCoord",dgm.GetMetaDatumWIStr(undistorted_with_metadata,"AmplCoord","Voltage")))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("AmplUnits",dgm.GetMetaDatumWIStr(undistorted_with_metadata,"AmplUnits","Volts")))
+
+    # Give it Coord4, Units4, IniVal4 copied from incoming data stream
+    # so math:def accum() can assemble a movie meaningfully
+    # once 
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Coord4",dgm.GetMetaDatumWIStr(undistorted_with_metadata,"Coord3","Frame Number")))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Units4",dgm.GetMetaDatumWIStr(undistorted_with_metadata,"Units3","Unitless")))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("IniVal4",dgm.GetMetaDatumWIDbl(undistorted_with_metadata,"IniVal3",0.0)))
+
+      
+
+    debug=False
+    if debug:
+
+        # Clear output buffer
+    	paramwfm_template.data[:,:]=0.0
+    
+        # clear validity buffer
+        validitybuf[:,:]=0.0
+
+        sys.stderr.write("Starting projection...\n")
+        sys.stderr.flush()
+        imageprojection_float(projparams,imagedata) # project into paramwfm_template
+
+        sys.stderr.write("Finished projection\n")
+        sys.stderr.flush()
+        compare_output=paramwfm_template.data.copy()      
+        compare_validity=validitybuf.copy()      
+        pass
+
+    # Clear output buffer
+    paramwfm_template.data[:,:]=0.0
+    
+    # clear validity buffer
+    validitybuf[:,:]=0.0
+
+    sys.stderr.write("Starting projection...\n")
+    sys.stderr.flush()
+    imageprojection_float(projparams,imagedata) # project into paramwfm_template
+
+    sys.stderr.write("Finished projection\n")
+    sys.stderr.flush()
+
+    if debug:
+        if (compare_output != paramwfm_template.data).any() or (compare_validity != validitybuf).any():
+            raise ValueError("UV projection repeatability failed")
+        pass
+
+
+    #paramwfm.data[:,:,0]=paramwfm_template.data/validitybuf
+    paramwfm.data[:,:,0]=paramwfm_template.data
+    paramwfm.data[:,:,1]=validitybuf
+   
+
+    return paramwfm
+
+  ]]}
+
+  pyfunc uv_projection.subearlyavg_accumulable_uv(ImgStack:dep,bkgnd_subtract_time_param:float) {[[
+       
+    IniVal=dgm.GetMetaDatumWIDbl(ImgStack,"IniVal4",0.0)
+    Step=dgm.GetMetaDatumWIDbl(ImgStack,"Step4",1.0)
+
+    if len(ImgStack.dimlen) < 4 or bkgnd_subtract_time_param < IniVal or ImgStack.dimlen[2] != 2:
+       paramwfm=makeresult(ModData,0,(1,))
+       weightswfm=makeresult(ModData,1,(1,))
+       return (paramwfm,weightswfm)
+
+    BkgndSubtractIndex=int((bkgnd_subtract_time_param - IniVal)/Step)
+
+
+
+    #BkgndNormalized = np.mean(ImgStack.data[:,:,0,:(BkgndSubtractIndex+1)],axis=2)
+    BkgndUnnormalized = np.mean(ImgStack.data[:,:,0,:(BkgndSubtractIndex+1)],axis=2)
+
+    paramwfm=makeresult(ModData,0,(ImgStack.data.shape[0],ImgStack.data.shape[1],ImgStack.data.shape[3]))
+    weightswfm=makeresult(ModData,1,(ImgStack.data.shape[0],ImgStack.data.shape[1]))
+
+    #paramwfm.data[:,:,0,:]=ImgStack.data[:,:,0,:]-np.expand_dims(BkgndNormalized,2)
+
+    paramwfm.data[:,:,:]=ImgStack.data[:,:,0,:]-np.expand_dims(BkgndUnnormalized,2)
+    weightswfm.data[:,:]=ImgStack.data[:,:,1,0]
+
+
+    #if (weightswfm.data[:,:,np.newaxis] != ImgStack.data[:,:,1,:]).any():
+    # Get array of ratios between weight error norms and weight norms
+    # ***!!! Weird that we don't get exactly the same weights every time (?)
+    weightdiffs = np.linalg.norm((weightswfm.data[:,:,np.newaxis] - ImgStack.data[:,:,1,:]).reshape(ImgStack.data.shape[0]*ImgStack.data.shape[1],ImgStack.data.shape[3],order='F'),axis=0)/np.linalg.norm(weightswfm.data[:,:].ravel())
+    
+    # Wait values from imageprojection_float() seem to vary slightly (?)
+    # There once were much larger variables due to non-atomic operations
+    # when the data was being accumulated. That is now fixed, but slight
+    # differences on the order of machine precision remain (?) 
+
+    # This test checks to make sure they are not becoming significant
+    if (weightdiffs > 1e-3).any():
+        # If this triggers, it means that the weights are different for different images in ImgStack (?)
+        raise ValueError("Weight mismatch in accumulation")
+    
+    paramwfm.MetaData=copy.deepcopy(ImgStack.MetaData)
+
+    # Output waveform, time axis is now 3rd dimension not 4th.     
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("IniVal3",dgm.GetMetaDatumWIDbl(ImgStack,"IniVal4",0.0)))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Step3",dgm.GetMetaDatumWIDbl(ImgStack,"Step4",1.0)))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Coord3",dgm.GetMetaDatumWIStr(ImgStack,"Coord4","Time")))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Units3",dgm.GetMetaDatumWIStr(ImgStack,"Units4","s")))
+
+    if "IniVal4" in paramwfm.MetaData:
+        dgm.DeleteMetaDatumWI(paramwfm,"IniVal4")
+        pass
+
+    if "Step4" in paramwfm.MetaData:
+        dgm.DeleteMetaDatumWI(paramwfm,"Step4")
+        pass
+
+    if "Coord4" in paramwfm.MetaData:
+        dgm.DeleteMetaDatumWI(paramwfm,"Coord4")
+        pass
+
+    if "Units4" in paramwfm.MetaData:
+        dgm.DeleteMetaDatumWI(paramwfm,"Units4")
+        pass
+
+
+    weightswfm.MetaData=copy.deepcopy(paramwfm.MetaData)
+
+    return (paramwfm,weightswfm)
+  ]]}
+
+
+
+  pyfunc uv_projection.accum_uv_projection(accumulation:dep,uv_proj:dep) {[[   #@qtconsole
+    # ***!!!! If the factoring out of the weights ends up working, we should modify this
+    # to factor the weights out as well !!!*** (maybe subearlyavg_accumulable_uv too?)
+      
+    # accumulation is the self-dependency. uv_proj is a ncols x nrows x 2  frame from accumulable_uv_projection
+    # index[0] of the 3rd axis is the projection data
+    # index[1] of the 3rd axis is the validitybuf
+
+    # if we already have perfectly good data, but uv_proj is blank, keep our perfectly good data
+    if np.prod(accumulation.dimlen) > 1 and accumulation.ndim >= 1 and np.prod(uv_proj.dimlen) <=1:
+      paramwfm=makeresult(ModData,0,accumulation.dimlen)
+      paramwfm.data[:,:,:]=accumulation.data
+      paramwfm.MetaData=copy.deepcopy(accumulation.MetaData)
+      return paramwfm
+
+
+    if np.prod(accumulation.dimlen) <= 1 or accumulation.ndim < 1 or (uv_proj.dimlen != accumulation.dimlen).any():
+       paramwfm=makeresult(ModData,0,uv_proj.dimlen)
+       if uv_proj.ndim > 1:
+         # just copy stack, first step in accumulation
+         paramwfm.data[:,:,:]=uv_proj.data
+         pass
+       paramwfm.MetaData=copy.deepcopy(uv_proj.MetaData)
+       return paramwfm
+
+    paramwfm=makeresult(ModData,0,uv_proj.dimlen)
+    # accumulate data
+    paramwfm.data[:,:,0] = accumulation.data[:,:,0] + uv_proj.data[:,:,0]
+    # accumulate validity
+    paramwfm.data[:,:,1] = accumulation.data[:,:,1] + uv_proj.data[:,:,1]
+    # Recalculate projection
+    #paramwfm.data[:,:,0] = paramwfm.data[:,:,1]/paramwfm.data[:,:,2]
+
+    # ***!!! Should probably verify that key elements of
+    # of accumulation.MetaData and uv_proj_stack.MetaData match ***!!!
+    paramwfm.MetaData=copy.deepcopy(accumulation.MetaData)
+    
+    return paramwfm
+    
+  ]]}
+
+
+
+
+  pyfunc uv_projection.accum_uv_projection_stack(accumulation:dep,accumulation_weights:dep,uv_proj_stack:dep,uv_proj_stack_weights:dep) {[[   #@qtconsole
+    # accumulation is the self-dependency. uv_proj_stack is a ncols x nrows x 2 x nframes stack of frames from accumulable_uv_projection
+    # index[0] of the 3rd axis is the projection data
+    # index[1] of the 3rd axis is the validitybuf
+
+    # if we already have perfectly good data, but uv_proj_stack is blank, keep our perfectly good data
+    if (np.prod(accumulation.dimlen) > 1 and accumulation.ndim >= 1 and
+        np.prod(accumulation_weights.dimlen) > 1 and accumulation_weights.ndim >= 1 and
+        np.prod(uv_proj_stack.dimlen) <=1):
+      paramwfm=makeresult(ModData,0,accumulation.dimlen)
+      paramwfm.data[:,:,:]=accumulation.data
+      paramwfm.MetaData=copy.deepcopy(accumulation.MetaData)
+
+      weightswfm = makeresult(ModData,1,accumulation_weights.dimlen)
+      weightswfm.data[:,:]=accumulation_weights.data
+      weightswfm.MetaData=copy.deepcopy(accumulation_weights.MetaData)
+      return (paramwfm,weightswfm)
+      
+
+    if (np.prod(accumulation.dimlen) <= 1 or accumulation.ndim < 1 or
+        np.prod(accumulation_weights.dimlen) <= 1 or accumulation_weights.ndim < 1 or
+        (uv_proj_stack.dimlen != accumulation.dimlen).any() or
+        (uv_proj_stack_weights.dimlen != accumulation_weights.dimlen).any()):
+      paramwfm=makeresult(ModData,0,uv_proj_stack.dimlen)
+      if uv_proj_stack.ndim > 1:
+        # just copy stack, first step in accumulation
+        paramwfm.data[:,:,:]=uv_proj_stack.data
+        pass
+      paramwfm.MetaData=copy.deepcopy(uv_proj_stack.MetaData)
+      weightswfm=makeresult(ModData,1,uv_proj_stack_weights.dimlen)
+      if uv_proj_stack_weights.ndim > 1:
+        # just copy stack, first step in accumulation
+        weightswfm.data[:,:]=uv_proj_stack_weights.data
+        pass
+      weightswfm.MetaData=copy.deepcopy(uv_proj_stack_weights.MetaData)
+      return (paramwfm,weightswfm)
+
+    paramwfm=makeresult(ModData,0,uv_proj_stack.dimlen)
+    weightswfm=makeresult(ModData,1,uv_proj_stack_weights.dimlen)
+
+    # Data is stored as a scaled sum of weights * data values (sum_i w_i * d_i)/(sum_i w_i) and a separate sum of weights (sum_i w_i)
+    # For only a single contribution this maps to just the data value and weight
+
+    # In order to accumulate the weighted average, we need to rescale the existing terms,  by multiplying by
+    # the old_sum_of_weights divided by the new_sum_of_weights. Then we can add in the the new_data_value*new_weight/new_sum_of_weights
+      
+    # accumulate weights into new_sum_of_weights
+    weightswfm.data[:,:]=accumulation_weights.data + uv_proj_stack_weights.data
+
+    # accumulate data, correcting scaling for previous weights
+    # i.e. multiply by old weights, divide by new weights
+    weightscaling = np.zeros(weightswfm.data.shape,dtype='f',order='F')
+    weightscaling[weightswfm.data != 0] = accumulation_weights.data[weightswfm.data != 0]/weightswfm.data[weightswfm.data != 0]
+    # double check that the scaling factor is finite; Convert any infs or NaNs to 0
+    weightscaling[~np.isfinite(weightscaling)]=0.0
+
+
+    weightscaling_newdata = np.zeros(weightswfm.data.shape,dtype='f',order='F')
+    weightscaling_newdata[weightswfm.data != 0] = uv_proj_stack_weights.data[weightswfm.data != 0]/weightswfm.data[weightswfm.data != 0]
+    # double check that the scaling factor is finite; Convert any infs or NaNs to 0
+    weightscaling_newdata[~np.isfinite(weightscaling_newdata)]=0.0
+      
+    #paramwfm.data[:,:,:] = accumulation.data[:,:,:]*weightscaling[:,:,np.newaxis] + uv_proj_stack.data[:,:,:]*weightscaling_newdata[:,:,np.newaxis]
+
+
+    (nx,ny,nt)=paramwfm.data.shape
+
+    accumulation_weights_rs=accumulation_weights.data.reshape(nx*ny,order='F')
+    got_accumulation = accumulation_weights_rs > 0
+
+    uv_proj_stack_weights_rs=uv_proj_stack_weights.data.reshape(nx*ny,order='F')
+    got_proj = uv_proj_stack_weights_rs > 0
+
+    got_both = got_accumulation & got_proj
+    
+    paramwfm.data[:,:,:]=np.NaN
+    paramwfm.data[:,:,:].reshape(nx*ny,nt,order='F')[got_accumulation,:] =  accumulation.data.reshape(nx*ny,nt,order='F')[got_accumulation,:]*weightscaling.reshape(nx*ny,1,order='F')[got_accumulation,:]
+
+    paramwfm.data.reshape(nx*ny,nt,order='F')[got_proj,:] = uv_proj_stack.data.reshape(nx*ny,nt,order='F')[got_proj,:]*weightscaling_newdata.reshape(nx*ny,1,order='F')[got_proj,:]
+
+    paramwfm.data.reshape(nx*ny,nt,order='F')[got_both,:] = accumulation.data.reshape(nx*ny,nt,order='F')[got_both,:]*weightscaling.reshape(nx*ny,1,order='F')[got_both,:] + uv_proj_stack.data.reshape(nx*ny,nt,order='F')[got_both,:]*weightscaling_newdata.reshape(nx*ny,1,order='F')[got_both,:]
+    							  
+
+    # Recalculate projection
+    #paramwfm.data[:,:,0,:] = paramwfm.data[:,:,1,:]/paramwfm.data[:,:,2,:]
+
+    # ***!!! Should probably verify that key elements of
+    # of accumulation.MetaData and uv_proj_stack.MetaData match ***!!!
+    paramwfm.MetaData=copy.deepcopy(accumulation.MetaData)
+    weightswfm.MetaData=copy.deepcopy(accumulation_weights.MetaData)
+    
+    #import pdb
+    #pdb.set_trace()
+    return (paramwfm,weightswfm)
+    
+  ]]}
+
+
+
+
+  pyfunc uv_projection.image_from_accumulable(accumulation:dep) {[[   #@qtconsole
+    # accumulation is the input
+    # index[0] of the 3rd axis is the projection data
+    # index[1] of the 3rd axis is the validitybuf
+
+    if np.prod(accumulation.dimlen) < 1 or accumulation.ndim < 3 or accumulation.ndim > 4:
+      paramwfm=makeresult(ModData,0,(1,))
+      paramwfm.data[::]=0
+      paramwfm.MetaData={}
+      return paramwfm
+
+    newdimlen=accumulation.dimlen
+    if len(accumulation.dimlen) == 4:
+        newdimlen=(accumulation.dimlen[0],accumulation.dimlen[1],accumulation.dimlen[3])
+        paramwfm=makeresult(ModData,0,newdimlen)
+
+        # Recalculate projection
+        paramwfm.data[:,:,:] = accumulation.data[:,:,0,:] # /accumulation.data[:,:,1,:]
+        pass
+    else:
+        newdimlen=(accumulation.dimlen[0],accumulation.dimlen[1])
+        paramwfm=makeresult(ModData,0,newdimlen)
+
+        # Recalculate projection
+        paramwfm.data[:,:] = accumulation.data[:,:,0] #/accumulation.data[:,:,1]
+
+        pass
+
+    paramwfm.MetaData=copy.deepcopy(accumulation.MetaData)
+
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("IniVal3",dgm.GetMetaDatumWIDbl(accumulation,"IniVal4",0.0)))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Step3",dgm.GetMetaDatumWIDbl(accumulation,"Step4",1.0)))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Coord3",dgm.GetMetaDatumWIStr(accumulation,"Coord4","Unitless")))
+    dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("Units3",dgm.GetMetaDatumWIStr(accumulation,"Units4","Unitless")))
+
+    if "IniVal4" in paramwfm.MetaData:
+        del paramwfm.MetaData["IniVal4"]
+        pass
+    if "Step4" in paramwfm.MetaData:
+        del paramwfm.MetaData["Step4"]
+        pass
+    if "Coord4" in paramwfm.MetaData:
+        del paramwfm.MetaData["Coord4"]
+        pass
+    if "Units4" in paramwfm.MetaData:
+        del paramwfm.MetaData["Units4"]
+        pass
+      
+
+    return paramwfm
+    
+  ]]}
+
+

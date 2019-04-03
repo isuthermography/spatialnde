@@ -31,9 +31,6 @@ clean:
 	rm -f *.pyc *~ */*~ */*.pyc *.bak */*.so */*.dll */*.bak *.aux *.log *.pdf spatial/*~ demos/*~ demos/*.pyc
 	rm -f */*/*~ */*/*.pyc */*/*.bak
 
-commit: clean
-	hg addrem
-	hg commit
 
 install:
 	@for i in $(SUBDIRS) ; do if [ -d $$i ] && [ -f $$i/Makefile ] ; then $(MAKE) $(MFLAGS) -C $$i install ; fi done

@@ -299,14 +299,14 @@ class ndepart(object):
 
         (landmarks_params,implpartparams)=cls.splitparams(ndepartparams)
         landmarks=point_landmarks.fromparams(landmarks_params)
-        
+
         implpart=implclass.fromstl(filename=filename,implpartparams=implpartparams,tol=tol,recalcnormals=recalcnormals,metersperunit=metersperunit,defaultappearance=defaultappearance)
 
         #uvparam=None # Reference or canonical uv parameterization
         #if uvparam_params is not None:
         #    uvparam=parameterization.new_from_params(implpart,uvparam_params)
         #    pass
-        
+
         return cls(frame=frame,implpart=implpart,landmarks=landmarks)
 
 
@@ -325,7 +325,24 @@ class ndepart(object):
         
         return cls(frame=frame,implpart=implpart,landmarks=landmarks)
 
-    
+    @classmethod
+    def fromDMobject(cls, frame, ndepartparams, srcobject, implclass=cadpart, tol=1e-4, recalcnormals=False,
+                   metersperunit=1.0, defaultappearance=None):
+
+        (landmarks_params, implpartparams) = cls.splitparams(ndepartparams)
+        landmarks = point_landmarks.fromparams(landmarks_params)
+
+        implpart = implclass.fromobject(srcobject=srcobject, implpartparams=implpartparams, tol=tol,
+                                        recalcnormals=recalcnormals, metersperunit=metersperunit,
+                                        defaultappearance=defaultappearance)
+
+        # uvparam=None # Reference or canonical uv parameterization
+        # if uvparam_params is not None:
+        #    uvparam=parameterization.new_from_params(implpart,uvparam_params)
+        #    pass
+
+        return cls(frame=frame, implpart=implpart, landmarks=landmarks)
+
     @classmethod
     def from_implpart_generator(cls,frame,ndepartparams,generator):
         # generator is called with implpartparams

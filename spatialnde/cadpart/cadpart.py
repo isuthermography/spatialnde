@@ -130,7 +130,7 @@ class cadpart(object):
     @classmethod
     def fromstl(cls,filename,implpartparams=None,tol=1e-4,recalcnormals=False,metersperunit=1.0,defaultappearance=None):
         facets=loadstl(filename)
-        
+
         nfacets=facets.shape[0]
 
         facets[:,1:,:]*=metersperunit  # convert distances to meters
@@ -204,8 +204,94 @@ class cadpart(object):
         
         
         return cls(tol=tol,implpartparams=implpartparams,surfaces=surfaces)
-        
-        
+
+    @classmethod
+    def fromDMobject(cls, srcobject, implpartparams=None, tol=1e-4, recalcnormals=False, metersperunit=1.0, defaultappearance=None):
+
+        facets = np.empty((len(srcobject.faces[0].triangles), 4, 3))
+        for i in range(0, len(srcobject.faces)):
+            for j in range(0, len(srcobject.faces[i].triangles)):
+                tri = srcobject.faces[i].triangles[j]
+                facets[j, 0, :] = tri.facenormal
+                facets[j, 1, :] = tri[0].point
+                facets[j, 2, :] = tri[1].point
+                facets[j, 3, :] = tri[2].point
+
+        nfacets = facets.shape[0]
+
+        facets[:, 1:, :] *= metersperunit  # convert distances to meters
+        # !!!*** Should use calcnormals() here
+        if recalcnormals or (facets[0, 0, :] == np.zeros(3, dtype='d')).all():
+            V = facets[:, 2, :] - facets[:, 1, :]
+            W = facets[:, 3, :] - facets[:, 1, :]
+            N = np.cross(V, W)
+            N = N / vecnorm(N, axis=1).reshape(N.shape[0], 1)  # normalize
+
+            facets[:, 0, :] = N  # Store in facets
+            pass
+
+        # identify surfaces, either from parameter (JSON string)
+        # or by algorithm
+        if implpartparams is None:
+            (list_of_surface_facets, facetsbyvertexnum, uniquevertexcoords) = identify_surfaces(facets, tol)
+            list_of_facets_surface_params = [(facetnumarray, None) for facetnumarray in list_of_surface_facets]
+            pass
+        else:
+            non_numpy_list_of_facets_surface_params = json.loads(implpartparams)
+            list_of_facets_surface_params = [(np.array(facetnums, dtype='d'), this_surface_params) for
+                                             (facetnums, this_surface_params) in
+                                             non_numpy_list_of_facets_surface_params]
+
+            # identify unique vertices
+            (vertexnumbers, uniquevertexcoords) = uniquevertices(facets[:, 1:, :].reshape(nfacets * 3, 3), tol)
+            facetsbyvertexnum = vertexnumbers.reshape(nfacets,
+                                                      3)  # This is a nfaces x 3 array of integers that gives unique vertex number of each of the three vertices of each triangle.
+
+            pass
+
+        # m=3  # DMObjects are limited to triangles
+
+        surfaces = []
+        for cnt in range(len(list_of_facets_surface_params)):
+            (thesefacets, thesesurfparams) = list_of_facets_surface_params[cnt]
+            vertexids = facetsbyvertexnum[thesefacets, :]
+            vertexidx = np.concatenate((vertexids, np.ones((vertexids.shape[0], 1), dtype=np.int32) * -1),
+                                       axis=1).reshape(vertexids.shape[0] * 4)
+            vertexidx_indices = np.arange(0, vertexids.shape[0] * 4, 4, dtype=np.uint32)
+            numvertices = 3 * np.ones(vertexidx_indices.shape[0], dtype=np.uint32)
+
+            buildintrinsicparameterization = lambda surf, params: polygonalsurface_planarparameterization.new(surf,
+                                                                                                              params)
+
+            surface = polygonalsurface.fromvertices(cnt,
+                                                    uniquevertexcoords,
+                                                    vertexidx_indices,
+                                                    vertexidx,
+                                                    numvertices,
+                                                    facets[thesefacets, 0, :],
+                                                    None,
+                                                    buildintrinsicparameterization=buildintrinsicparameterization,
+                                                    cadpartparams={"intrinsicparameterization": thesesurfparams},
+                                                    tol=tol,
+                                                    appearance=defaultappearance)
+
+            surfaces.append(surface)
+            pass
+
+        if implpartparams is None:
+            # Create JSON definition of our parameterization
+            non_numpy_list_of_facets_surface_params = []
+
+            for cnt in range(len(list_of_facets_surface_params)):
+                this_surface_params = surfaces[cnt].intrinsicparameterization.intrinsicparameterizationparams
+                non_numpy_list_of_facets_surface_params.append((tuple(list_of_facets_surface_params[cnt][0].astype(object)), this_surface_params))
+                pass
+
+            implpartparams = json.dumps(non_numpy_list_of_facets_surface_params)
+            pass
+
+        return cls(tol=tol, implpartparams=implpartparams, surfaces=surfaces)
+
     def X3DWrite(self,serializer,ourframe,destframe,UVparameterization=None):
         # return a list of lxml X3D <Shape> elements with texture coordinates
         # given according to UVparameterization.

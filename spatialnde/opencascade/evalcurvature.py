@@ -215,7 +215,8 @@ def evalcurvature(CADsurface,CADu,CADv,finetol,approxoutwardnormal=None):
     #curvaturetangents = np.dot(np.array((Uvec,Vprimevec),dtype='d').T,evects)
     curvaturetangents=np.dot(np.array((Uvec,Vvec)).T,evects)
     # per ShifrinDiffGeo.pdf page 52 confirm these tangents are orthogonal
-    if np.dot(curvaturetangents[:,0],curvaturetangents[:,1]) >= 1e-8:
+    #if np.dot(curvaturetangents[:,0],curvaturetangents[:,1]) >= 1e-8:
+    if np.dot(curvaturetangents[:,0],curvaturetangents[:,1]) >= 1e-2:
         raise GeometricInconsistency("Curvature tangents are not orthogonal (inner product = %g)" % (np.dot(curvaturetangents[:,0],curvaturetangents[:,1])))
     # We don't want the eigenframe to be mirrored relative to the (U,V)
     # frame, for consistency in interpreting positive vs. negative curvature.

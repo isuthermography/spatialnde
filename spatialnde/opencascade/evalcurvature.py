@@ -1,5 +1,7 @@
 import sys
 import numpy as np
+from numpy import linalg
+from numpy.linalg import norm
 
 
 from OCC.GeomLProp import GeomLProp_SLProps
@@ -136,7 +138,9 @@ def evalcurvature(CADsurface,CADu,CADv,finetol,approxoutwardnormal=None):
     # Note that this verifies the handedness of the coordinate frame,
     # i.e. that U cross V gives an outward normal
     # and is thus important
-    assert(np.abs(np.dot(np.cross(Uvec,Vvec),np.array((Normal.X(),Normal.Y(),Normal.Z()),dtype='d'))-1.0) < 0.025)
+    Wvec = np.cross(Uvec,Vvec)
+    Wnormvec = Wvec/np.linalg.norm(Wvec)
+    assert(np.abs(np.dot(Wnormvec,np.array((Normal.X(),Normal.Y(),Normal.Z()),dtype='d'))-1.0) < 0.025)
            
     ## Inner product matrix, for converting between covariant
     ## and contravariant components

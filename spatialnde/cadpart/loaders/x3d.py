@@ -1,6 +1,7 @@
 import sys
 import copy
 import string
+import io
 
 from lxml import etree
 import numpy as np
@@ -26,6 +27,15 @@ def read_mfstring(mfstring):
     StringBuf = None
     pos=0
     in_string = False
+
+    if hasattr(mfstring,"decode"):
+        # in py2.7, StringIO() wants unicode strings, not 'str'
+        # so since py2.7 str() has a decode(), we call that 
+        # to get a unicode object instead
+        #... will also make this work on a bytes object.
+        mfstring=mfstring.decode('utf-8')
+        pass
+
     last_was_escape = False
     while pos < len(mfstring):
         if not in_string:

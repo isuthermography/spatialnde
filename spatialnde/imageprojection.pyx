@@ -648,6 +648,7 @@ def imageprojection_prepare_float(projectionmodel,cameraframe,partlist,parameter
     # NOTE: evaluate_zbuffer drops baseline projection validity into validitybuf
     
     print("zbuffer calc time: %f s" % (time.time()-zbufstart))
+    print("num facets: %d" % (np.count_nonzero(imagedata_facetid)))
 
     ## Debugging: disable z prediction
     #for surfacecnt in range(nsurfaces):

@@ -332,7 +332,7 @@ class ndepart(object):
         (landmarks_params, implpartparams) = cls.splitparams(ndepartparams)
         landmarks = point_landmarks.fromparams(landmarks_params)
 
-        implpart = implclass.fromobject(srcobject=srcobject, implpartparams=implpartparams, tol=tol,
+        implpart = implclass.fromDMobject(srcobject=srcobject, implpartparams=implpartparams, tol=tol,
                                         recalcnormals=recalcnormals, metersperunit=metersperunit,
                                         defaultappearance=defaultappearance)
 

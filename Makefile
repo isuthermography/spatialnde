@@ -20,6 +20,9 @@ endif
 ifneq ($(PYTHON3.7), /none)
 	$(PYTHON3.7) ./setup.py build 
 endif
+ifneq ($(PYTHON3.8), /none)
+	$(PYTHON3.8) ./setup.py build 
+endif
 ifneq ($(DEFAULTPY), /none)
 	$(DEFAULTPY) ./setup.py build
 endif
@@ -48,6 +51,9 @@ ifneq ($(PYTHON3.6), /none)
 endif
 ifneq ($(PYTHON3.7), /none)
 	$(PYTHON3.7) ./setup.py install --prefix=$(PREFIX) 
+endif
+ifneq ($(PYTHON3.8), /none)
+	$(PYTHON3.8) ./setup.py install --prefix=$(PREFIX) 
 endif
 ifneq ($(DEFAULTPY), /none)
 	$(DEFAULTPY) ./setup.py install --prefix=$(PREFIX) 

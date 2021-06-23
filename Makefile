@@ -1,7 +1,7 @@
 
 include defs.mk
 
-SUBDIRS= dataguzzler pt_steps
+SUBDIRS= dataguzzler
 
 all:
 	@for i in $(SUBDIRS) ; do if [ -d $$i ] && [ -f $$i/Makefile ] ; then $(MAKE) $(MFLAGS) -C $$i ; fi done

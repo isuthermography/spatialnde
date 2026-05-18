@@ -3,3 +3,9 @@ demos/sc6000_1009_calib.cic
 *.pyc
 __pycache__
 build
+
+spatialnde/cadpart/polygonalsurface_accel.c
+spatialnde/cadpart/polygonalsurface_texcoordparameterization_accel.c
+spatialnde/geometry_accel.c
+spatialnde/imageorthographic.c
+spatialnde/imageprojection.c

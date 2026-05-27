@@ -17,7 +17,7 @@
       from cStringIO import StringIO  # python 2.x
       pass
     except ImportError:
-      from io import StringIO # python 3.x
+      from io import BytesIO # python 3.x
       pass
 
     import dg_metadata as dgm
@@ -76,11 +76,11 @@
       if index in x3d_obj_cache:
         return x3d_obj_cache[index]
       else:
-        x3dbuf = StringIO(dgm.GetMetaDatumWIStr(channeldep,"X3DGeom",""))
-	objframe=coordframe()
+        x3dbuf = BytesIO(dgm.GetMetaDatumWIStr(channeldep,"X3DGeom","").encode("utf-8"))
+        objframe=coordframe()
         obj = ndepart.fromx3d(objframe,ndepartparams,x3dbuf)
-	x3d_obj_cache[index]=(objframe,obj)
-	return (objframe,obj)
+        x3d_obj_cache[index]=(objframe,obj)
+        return (objframe,obj)
       pass
 
     cached_poses={}
@@ -151,7 +151,7 @@
       except ValueError:
         # raise
         paramwfm=makeresult(ModData,0,(1,))
-	exc_info = sys.exc_info()[1:]
+        exc_info = sys.exc_info()[1:]
         dgm.AddMetaDatumWI(paramwfm,dgm.MetaDatum("ERROR",str(sys.exc_info()[0])+"\n"+traceback.format_exc()+"\n"))
         return paramwfm              
       cached_poses[pose_index]=(projectedlandmarks,Pose)
@@ -171,7 +171,7 @@
 
         testpixelcoords=np.inner(projmodel.new_camera_mtx,testcoords[:3])
         #print("testpixelcoords=%s" % (str(testpixelcoords)))
-        #print("datasetcoords=%s" % (str(dataset.landmarkpixelcoords[testlandmark])))	
+        #print("datasetcoords=%s" % (str(dataset.landmarkpixelcoords[testlandmark])))   
         pass
       pass
 
@@ -351,7 +351,7 @@
     if debug:
 
         # Clear output buffer
-    	paramwfm_template.data[:,:]=0.0
+        paramwfm_template.data[:,:]=0.0
     
         # clear validity buffer
         validitybuf[:,:]=0.0
@@ -592,7 +592,7 @@
     paramwfm.data.reshape(nx*ny,nt,order='F')[got_proj,:] = uv_proj_stack.data.reshape(nx*ny,nt,order='F')[got_proj,:]*weightscaling_newdata.reshape(nx*ny,1,order='F')[got_proj,:]
 
     paramwfm.data.reshape(nx*ny,nt,order='F')[got_both,:] = accumulation.data.reshape(nx*ny,nt,order='F')[got_both,:]*weightscaling.reshape(nx*ny,1,order='F')[got_both,:] + uv_proj_stack.data.reshape(nx*ny,nt,order='F')[got_both,:]*weightscaling_newdata.reshape(nx*ny,1,order='F')[got_both,:]
-    							  
+                                                          
 
     # Recalculate projection
     #paramwfm.data[:,:,0,:] = paramwfm.data[:,:,1,:]/paramwfm.data[:,:,2,:]

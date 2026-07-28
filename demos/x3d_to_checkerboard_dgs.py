@@ -11,7 +11,7 @@ try:
     from cStringIO import StringIO  # python 2.x
     pass
 except ImportError:
-    from io import StringIO # python 3.x
+    from io import BytesIO # python 3.x
     pass
 
 
@@ -33,7 +33,7 @@ x3dbasename=os.path.splitext(x3dfile)[0]
 objframe=coordframe() 
 
 obj = ndepart.fromx3d(objframe,None,x3dname,tol=1e-6)
-VRMLBuf=StringIO()
+VRMLBuf=BytesIO()
 
 VRMLAppear=VRMLAppearance.Simple(DefName="ImageMap")
 obj.VRMLFile(VRMLBuf,objframe,UVparameterization=None,appearance=VRMLAppear)
@@ -43,7 +43,7 @@ wfmdict={}
 wfmdict[x3dbasename]=dg.wfminfo()
 wfmdict[x3dbasename].Name=x3dbasename
 wfmdict[x3dbasename].dimlen=np.array((),dtype='i8')
-dgm.AddMetaDatumWI(wfmdict[x3dbasename],dgm.MetaDatum("VRML97Geom",VRMLBuf.getvalue()))
+dgm.AddMetaDatumWI(wfmdict[x3dbasename],dgm.MetaDatum("VRML97Geom",VRMLBuf.getvalue().decode("utf8")))
 
 x3dparamname=x3dbasename+"_parameterization"
 wfmdict[x3dparamname]=dg.wfminfo()
@@ -56,8 +56,8 @@ wfmdict[x3dparamname].data=np.zeros(wfmdict[x3dparamname].dimlen,dtype='f')
 xpos=np.arange(imageshape[0],dtype='d')
 ypos=np.arange(imageshape[1],dtype='d')
 
-xchecker = (xpos//(imageshape[0]*1.0/(cbcols)) % 2).astype(np.bool)
-ychecker = (ypos//(imageshape[1]*1.0/(cbrows)) % 2).astype(np.bool)
+xchecker = (xpos//(imageshape[0]*1.0/(cbcols)) % 2).astype(bool)
+ychecker = (ypos//(imageshape[1]*1.0/(cbrows)) % 2).astype(bool)
 
 
 wfmdict[x3dparamname].data[:,:]=xchecker.reshape(imageshape[0],1) ^ ychecker.reshape(1,imageshape[1])  # XOR operator

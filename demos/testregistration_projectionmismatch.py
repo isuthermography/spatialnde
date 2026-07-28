@@ -6,7 +6,7 @@ try:
     from cStringIO import StringIO  # python 2.x
     pass
 except ImportError:
-    from io import StringIO # python 3.x
+    from io import BytesIO # python 3.x
     pass
 
 import numpy as np
@@ -61,7 +61,7 @@ ndepartparams=ndepartparams_from_landmarked3d(landmarked_3d_wfmdict,[ landmarked
 # url set (from dataguzzler_define_landmarks_load_x3d) so
 # we load it instead
 #testobj = ndepart.fromx3d(objframe,ndepartparams,x3dname)
-x3dbuf = StringIO(dgm.GetMetaDatumWIStr(landmarked_3d_wfmdict[landmarked_3d_x3dchan],"X3DGeom",""))
+x3dbuf = BytesIO(dgm.GetMetaDatumWIStr(landmarked_3d_wfmdict[landmarked_3d_x3dchan],"X3DGeom","").encode("utf8"))
 testobj = ndepart.fromx3d(objframe,ndepartparams,x3dbuf)
 
 projmodel = ImageProjectionModel.fromcalibfiledataguzzler(imgdgs_wfmdict[imgdgs_chan],calibfile,alphaoverride=1.0) # specify alphaoverride to indicate that undistortion has already been applied

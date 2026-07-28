@@ -149,8 +149,8 @@ else:
 xpos=np.arange(imageshape[0],dtype='d')
 ypos=np.arange(imageshape[1],dtype='d')
 
-xchecker = (xpos//(imageshape[0]*1.0/(cbcols)) % 2).astype(np.bool)
-ychecker = (ypos//(imageshape[1]*1.0/(cbrows)) % 2).astype(np.bool)
+xchecker = (xpos//(imageshape[0]*1.0/(cbcols)) % 2).astype(bool)
+ychecker = (ypos//(imageshape[1]*1.0/(cbrows)) % 2).astype(bool)
 
 
 wfmdict[texturerawname].data[:,:]=xchecker.reshape(imageshape[0],1) ^ ychecker.reshape(1,imageshape[1])  # XOR operator

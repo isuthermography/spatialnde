@@ -5,7 +5,7 @@ try:
     from cStringIO import StringIO  # python 2.x
     pass
 except ImportError:
-    from io import StringIO # python 3.x
+    from io import BytesIO # python 3.x
     pass
 
 from spatialnde.coordframes import concrete_affine
@@ -101,12 +101,12 @@ if __name__=="__main__":
 
     #  Generate dataguzzler VRML string
     
-    DGVRMLBuf=StringIO()
+    DGVRMLBuf=BytesIO()
     dgvrmlwriter = VRMLSerialization.tofileorbuffer(DGVRMLBuf)
     moondial.VRMLWrite(dgvrmlwriter,objframe,UVparameterization=None) # ,appearance=VRMLAppear)
     dgvrmlwriter.finish()
 
-    DGX3DBuf=StringIO()
+    DGX3DBuf=BytesIO()
     dgx3dwriter = X3DSerialization.tofileorbuffer(DGX3DBuf)
     moondial.X3DWrite(dgx3dwriter,objframe,UVparameterization=None) # ,appearance=VRMLAppear)
     dgx3dwriter.finish()
@@ -117,8 +117,8 @@ if __name__=="__main__":
     wfmdict["moondial"]=dg.wfminfo()
     wfmdict["moondial"].Name="moondial"
     wfmdict["moondial"].dimlen=np.array((),dtype='i8')
-    dgm.AddMetaDatumWI(wfmdict["moondial"],dgm.MetaDatum("VRML97Geom",DGVRMLBuf.getvalue()))
-    dgm.AddMetaDatumWI(wfmdict["moondial"],dgm.MetaDatum("X3DGeom",DGX3DBuf.getvalue()))
+    dgm.AddMetaDatumWI(wfmdict["moondial"],dgm.MetaDatum("VRML97Geom",DGVRMLBuf.getvalue().decode("utf8")))
+    dgm.AddMetaDatumWI(wfmdict["moondial"],dgm.MetaDatum("X3DGeom",DGX3DBuf.getvalue().decode("utf8")))
 
     teximage=scipy.ndimage.imread("/usr/local/src/h3d/svn/H3DAPI/examples/x3dmodels/moondial/texture.jpg",flatten=True).astype(np.float32).T
     wfmdict["moondial_tex"]=dg.wfminfo()

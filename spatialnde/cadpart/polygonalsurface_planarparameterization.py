@@ -30,7 +30,7 @@ def uniquevertices(vertices,tolerance):
     
     vertexcnt=0
     
-    vertexmask = np.zeros(nv,dtype=np.bool)  # We set an element here to True once we assign it to a unique vertex
+    vertexmask = np.zeros(nv,dtype=bool)  # We set an element here to True once we assign it to a unique vertex
     
     while vertexcnt < nv:
         if vertexmask[vertexcnt]:
@@ -78,23 +78,23 @@ def findadjacentfacets(facetsbyvertexnum):
     
     # Now try to find which facets are adjacent by shared vertices
     # create n x n matrix of truth values for vertex i matches vertex i
-    facetvertexmatch_ii=(facetsbyvertexnum[:,0].reshape(n,1)-facetsbyvertexnum[:,0].reshape(1,n)).astype(np.bool) 
+    facetvertexmatch_ii=(facetsbyvertexnum[:,0].reshape(n,1)-facetsbyvertexnum[:,0].reshape(1,n)).astype(bool) 
 
-    facetvertexmatch_ij=(facetsbyvertexnum[:,0].reshape(n,1)-facetsbyvertexnum[:,1].reshape(1,n)).astype(np.bool) 
+    facetvertexmatch_ij=(facetsbyvertexnum[:,0].reshape(n,1)-facetsbyvertexnum[:,1].reshape(1,n)).astype(bool) 
 
-    facetvertexmatch_ik=(facetsbyvertexnum[:,0].reshape(n,1)-facetsbyvertexnum[:,2].reshape(1,n)).astype(np.bool) 
+    facetvertexmatch_ik=(facetsbyvertexnum[:,0].reshape(n,1)-facetsbyvertexnum[:,2].reshape(1,n)).astype(bool) 
 
-    facetvertexmatch_ji=(facetsbyvertexnum[:,1].reshape(n,1)-facetsbyvertexnum[:,0].reshape(1,n)).astype(np.bool) 
+    facetvertexmatch_ji=(facetsbyvertexnum[:,1].reshape(n,1)-facetsbyvertexnum[:,0].reshape(1,n)).astype(bool) 
 
-    facetvertexmatch_jj=(facetsbyvertexnum[:,1].reshape(n,1)-facetsbyvertexnum[:,1].reshape(1,n)).astype(np.bool) 
+    facetvertexmatch_jj=(facetsbyvertexnum[:,1].reshape(n,1)-facetsbyvertexnum[:,1].reshape(1,n)).astype(bool) 
 
-    facetvertexmatch_jk=(facetsbyvertexnum[:,1].reshape(n,1)-facetsbyvertexnum[:,2].reshape(1,n)).astype(np.bool) 
+    facetvertexmatch_jk=(facetsbyvertexnum[:,1].reshape(n,1)-facetsbyvertexnum[:,2].reshape(1,n)).astype(bool) 
 
-    facetvertexmatch_ki=(facetsbyvertexnum[:,2].reshape(n,1)-facetsbyvertexnum[:,0].reshape(1,n)).astype(np.bool) 
+    facetvertexmatch_ki=(facetsbyvertexnum[:,2].reshape(n,1)-facetsbyvertexnum[:,0].reshape(1,n)).astype(bool) 
 
-    facetvertexmatch_kj=(facetsbyvertexnum[:,2].reshape(n,1)-facetsbyvertexnum[:,1].reshape(1,n)).astype(np.bool) 
+    facetvertexmatch_kj=(facetsbyvertexnum[:,2].reshape(n,1)-facetsbyvertexnum[:,1].reshape(1,n)).astype(bool) 
 
-    facetvertexmatch_kk=(facetsbyvertexnum[:,2].reshape(n,1)-facetsbyvertexnum[:,2].reshape(1,n)).astype(np.bool) 
+    facetvertexmatch_kk=(facetsbyvertexnum[:,2].reshape(n,1)-facetsbyvertexnum[:,2].reshape(1,n)).astype(bool) 
 
 
     have_common_edge=((facetvertexmatch_ii & (facetvertexmatch_jk | facetvertexmatch_kj))
@@ -170,7 +170,7 @@ def identify_surfaces(facets,tolerance):
     # adjacent is an nxn bool array indicating adjacency
     # FYI this algorithm assumes that triangle edges are not subdivided
 
-    used_mask=np.zeros(n,dtype=np.bool)
+    used_mask=np.zeros(n,dtype=bool)
 
     facetnum=0
     surfaces=[]
@@ -180,7 +180,7 @@ def identify_surfaces(facets,tolerance):
             facetnum+=1
             continue
 
-        surface_mask=np.zeros(n,dtype=np.bool)
+        surface_mask=np.zeros(n,dtype=bool)
 
         surface_mask[facetnum]=True
         surface_normal = facets[facetnum,0,:]

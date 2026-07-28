@@ -669,7 +669,7 @@ def imageprojection_prepare_float(projectionmodel,cameraframe,partlist,parameter
     #return params
 
     # Find z prediction mismatches
-    zmismatch=np.zeros((imageshape[0],imageshape[1]),dtype=np.bool)
+    zmismatch=np.zeros((imageshape[0],imageshape[1]),dtype=bool)
 
 
     # Evaluate z predictions to right

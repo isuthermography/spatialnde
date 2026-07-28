@@ -125,7 +125,7 @@ class dataguzzlerpixelarray(object):
         dataslices.append(slice(None,None,-1))  # reverse y
         dataslices.append(slice(None))  # No change to x
 
-        data=data[dataslices]  # apply reversal
+        data=data[tuple(dataslices)]  # apply reversal
         return data
     
     pass

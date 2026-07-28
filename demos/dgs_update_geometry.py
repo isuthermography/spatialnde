@@ -26,7 +26,7 @@ try:
     from cStringIO import StringIO  # python 2.x
     pass
 except ImportError:
-    from io import StringIO # python 3.x
+    from io import BytesIO # python 3.x
     pass
 
 
@@ -69,20 +69,20 @@ for cnt in range(len(newobj.implpart.surfaces)):
 
 
 # Update X3D and VRML metadata
-VRMLBuf=StringIO()
+VRMLBuf=BytesIO()
 vrmlwriter = VRMLSerialization.tofileorbuffer(VRMLBuf)
 
 newobj.VRMLWrite(vrmlwriter,objframe,UVparameterization=None)
 vrmlwriter.finish()
 
-X3DBuf=StringIO()
+X3DBuf=BytesIO()
 x3dnamespace=None # just use default
 x3dwriter=X3DSerialization.tofileorbuffer(X3DBuf,x3dnamespace=x3dnamespace)
 newobj.X3DWrite(x3dwriter,objframe,UVparameterization=None)
 x3dwriter.finish()
 
-dgm.AddMetaDatumWI(geomchan,dgm.MetaDatum("VRML97Geom",VRMLBuf.getvalue()))
-dgm.AddMetaDatumWI(geomchan,dgm.MetaDatum("X3DGeom",X3DBuf.getvalue()))
+dgm.AddMetaDatumWI(geomchan,dgm.MetaDatum("VRML97Geom",VRMLBuf.getvalue().decode("utf8")))
+dgm.AddMetaDatumWI(geomchan,dgm.MetaDatum("X3DGeom",X3DBuf.getvalue().decode("utf8")))
     
 assert(not(os.path.exists(dgsfilename)))
 

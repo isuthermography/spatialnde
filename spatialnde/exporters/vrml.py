@@ -1,5 +1,13 @@
 from . import serialization
 
+try:
+    basestring # python 2.x
+    pass
+except NameError:
+    basestring=str # python 3.x
+    pass
+
+
 class VRMLSerialization(serialization):
     buf=None
     opened=None
@@ -17,7 +25,7 @@ class VRMLSerialization(serialization):
         pass
 
     def finish(self):
-        self.buf.write("\n  ]\n}\n") # Close wrapping separator opened in tofileorbuffer()
+        self.buf.write(b"\n  ]\n}\n") # Close wrapping separator opened in tofileorbuffer()
         
         if self.opened:
             self.buf.close()
@@ -28,16 +36,16 @@ class VRMLSerialization(serialization):
     @classmethod
     def tofileorbuffer(cls,buf):
         if isinstance(buf,basestring):
-            buf=open(buf,"w")
+            buf=open(buf,"wb")
             opened=True
             pass
         else:
             opened=False
             pass
 
-        buf.write("#VRML V2.0 utf8\n")
+        buf.write(b"#VRML V2.0 utf8\n")
 
-        buf.write("Group {\n  children [\n")
+        buf.write(b"Group {\n  children [\n")
         return cls(buf=buf,opened=opened)
     pass
 

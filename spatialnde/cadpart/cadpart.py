@@ -369,7 +369,7 @@ class cadpart(object):
 
     def assign_appearances(self,appearances):
         
-        if not isinstance(appearances,collections.Sequence):
+        if not isinstance(appearances,collections.abc.Sequence):
             # Just a single appearance... broadcast it over all surfaces
             appearances = [appearances]*len(self.surfaces)
             pass

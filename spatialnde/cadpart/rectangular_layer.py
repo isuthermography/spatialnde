@@ -2,7 +2,7 @@ import numpy as np
 
 from .cadpart import cadpart
 from .polygonalsurface import polygonalsurface
-from .polygonalsurface_intrinsicparameterization import polygonalsurface_texcoordparameterization
+from .polygonalsurface_texcoordparameterization import polygonalsurface_texcoordparameterization
 
 class rectangular_layer(cadpart):
     # Thin layer 
@@ -36,6 +36,8 @@ class rectangular_layer(cadpart):
                           dtype='d')
         normals=np.array(((0.0,0.0,1.0),), # top surface
                          dtype='d')
+        normalidx=np.array((0,))
+        numvertices=np.array((4,))
         
         surfacepoint=np.array((0.0,0.0,0.0),dtype='d')
         frontnormal=np.array((0.0,0.0,1.0),dtype='d')
@@ -58,7 +60,7 @@ class rectangular_layer(cadpart):
         #                          5), # down surface
         #                        dtype='d')
 
-        texcoord = np.array( (((0.0,0.0),(1.0,0.0),(1.0,1.0),(0.0,1.0)),),dtype='d')
+        texcoord = np.array( ((0.0,0.0),(1.0,0.0),(1.0,1.0),(0.0,1.0)),dtype='d')
         texcoordidx = np.array((0,1,2,3,-1),dtype='i4')
         
         self.surfaces=[]
@@ -68,8 +70,10 @@ class rectangular_layer(cadpart):
                                                                vertices=vertices,
                                                                vertexidx_indices=vertexidx_indices,
                                                                vertexidx=vertexidx[(cnt*5):((cnt+1)*5)],
+                                                               numvertices=numvertices,
                                                                normals=normals[cnt:(cnt+1),:],
-                                                               vertexnormals=None,
+                                                               normalidx=normalidx,
+                                                               #vertexnormals=None,
                                                                cadpartparams=None,
                                                                appearance=appearance,
                                                                solid=False,

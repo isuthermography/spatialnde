@@ -1184,7 +1184,7 @@ class polygonalsurface(surface):
                 
                 np.savetxt(normalbuf,ourframe.transformto(destframe,self.normals[self.normalidx[firstvertex:(firstvertex+self.numvertices[cnt])],:],inhomogeneous_vector=True),delimiter=" ",newline=" ")
 
-                np.savetxt(normalindexbuf,np.arange(normalpos,normalpos+self.numvertices[cnt],dtype='i32'),fmt="%d",delimiter=" ",newline=" ")
+                np.savetxt(normalindexbuf,np.arange(normalpos,normalpos+self.numvertices[cnt],dtype=np.int32),fmt="%d",delimiter=" ",newline=" ")
                 
                 normalpos+=self.numvertices[cnt]
                 pass
@@ -1316,7 +1316,7 @@ class polygonalsurface(surface):
                 
                 np.savetxt(serializer.buf,ourframe.transformto(destframe,self.normals[self.normalidx[firstvertex:(firstvertex+self.numvertices[cnt])],:],inhomogeneous_vector=True),delimiter=" ",newline=" ")
                 
-                np.savetxt(normalindexbuf,np.arange(normalpos,normalpos+self.numvertices[cnt],dtype='i32'),fmt="%d",delimiter=" ",newline=" ")
+                np.savetxt(normalindexbuf,np.arange(normalpos,normalpos+self.numvertices[cnt],dtype=np.int32),fmt="%d",delimiter=" ",newline=" ")
                 
                 normalpos+=self.numvertices[cnt]
                 pass
@@ -1372,7 +1372,7 @@ class polygonalsurface(surface):
         
             serializer.buf.write(b"    ]\n") # close texCoordIndex        
             pass
-        serializer.buf.write(b"    solid %s\n" % (str(self.solid).upper()))
+        serializer.buf.write(b"    solid %s\n" % (str(self.solid).upper()).encode('utf-8'))
         
         serializer.buf.write(b"  }\n") # Close IndexedFaceSet
         serializer.buf.write(b"}\n") # Close Shape

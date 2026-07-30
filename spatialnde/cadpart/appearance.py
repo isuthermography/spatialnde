@@ -161,7 +161,7 @@ class texture_url(vrml_x3d_appearance):
         if self.texture_url is None:
             return b"texture ImageTexture { url [ ] }\n"
         else:
-            return b"texture ImageTexture { url [ %s ] }\n" % (escape_mfstring(self.texture_url))
+            return b"texture ImageTexture { url [ %s ] }\n" % (escape_mfstring(self.texture_url).encode('utf-8'))
         pass
     
     

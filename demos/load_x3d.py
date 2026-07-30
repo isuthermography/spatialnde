@@ -18,7 +18,7 @@ x3dbasename=os.path.splitext(x3dfile)[0]
 
 use_bytesio=True
 if use_bytesio:
-    fh=open(x3dname,"r")
+    fh=open(x3dname,"rb")
     x3d_bytes = fh.read()
     x3d_bytesio = BytesIO(x3d_bytes)
     pass

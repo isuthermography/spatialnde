@@ -32,7 +32,7 @@ class vrml_x3d_appearance(appearance):
                     # subclass which defines what type (image, material, etc.)
                     # of appearance we will generate
                     ret = self.generate_vrml_element(serialization)
-                    return b"appearance DEF %s Appearance {\n%s\n}\n" % (self.DefName,ret)
+                    return b"appearance DEF %s Appearance {\n%s\n}\n" % (self.DefName.encode('utf8'),ret)
                 else:                    
                     return b"appearance USE %s\n" % (self.DefName)
                 pass

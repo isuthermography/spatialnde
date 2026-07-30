@@ -105,6 +105,7 @@ x3dchan=create_x3d_vrml_channel(wfmdict,x3dbasename,assembly,objframe)
 # adjust texture channel
 dgm.AddMetaDatumWI(x3dchan,dgm.MetaDatum("Scope_KeyboardControlChan",texturename))
 
+#wfmdict["x3dfile"]=x3dchan
 #wfmdict["x3dfile"]=dg.wfminfo()
 #wfmdict["x3dfile"].Name="x3dfile"
 #wfmdict["x3dfile"].dimlen=np.array((1,),dtype='i8')
@@ -162,6 +163,7 @@ wfmdict[texturerawname].data[:,:]=xchecker.reshape(imageshape[0],1) ^ ychecker.r
 dgch=dgc.client();
 
 for wfmname in wfmdict:
+    print(f"uploading {wfmname}")
     dgc.uploadwfm(dgch,wfmdict[wfmname])
     pass
 

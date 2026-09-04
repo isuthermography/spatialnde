@@ -7,6 +7,8 @@
 4. Open blender. Middle mouse button zooms. Alt left mouse button
 rotates. Shift alt left mouse button slides... Delete default cube. 
 Import .x3d file and zoom into it.
+Shift the object to the origin if needed. (select the object in object mode; right click...set origin...geometry to origin)
+
    Alt-right-mouse button to select it (may freeze for a minute... just be patient), then switch from object mode to edit
    mode.
    Go into edge selection mode. Select seams. Mark seams. Go into
@@ -21,7 +23,7 @@ Import .x3d file and zoom into it.
    must be turned on in preferences...addons. Adjust resolution when exporting suggest 8 digits. 
    Export as X3D to a _UV.x3d file
    WARNING: blender will rotate the x,y,z axes on x3d import, but it rotates 
-            them back on x3d export (!)
+            them back on x3d export however if you loaded it in from something else such as stl, you need to manually remove the -90 degree rotation around -x axis from the generated x3d(!). Also need to scale down by a factor 1000 if the stl was in millimeters.
 
 4.5 Add Curvatures from CAD file. You must use a .brep, .step, or .iges file that
 matches the meshed representation exactly!
@@ -46,7 +48,8 @@ Example: horizontal distance = 614px  -> .470 m.
   horiz scale = .470*1024/614 = .783 meters/teximage width
 vertical distance = 63 px -> .048 m.
   vert scale = .048*1024/63 = .780 meters/teximage width
-
+CORRECTION: latest versions give texture coordinates in the [0,1] range.
+Therefore, scale=known distance/texture distance. For example, known distance=.193675m, texture distance=0.3862, scale=.513525
 Then you can rerun dataguzzler_define_landmarks_load_x3d.py with the horizontal and
 vertical scale factors as two separate additional command line parameters
 

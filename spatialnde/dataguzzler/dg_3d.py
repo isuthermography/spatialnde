@@ -100,8 +100,8 @@ def ndepartparams_from_landmarked3d(l3d_wfmdict,wfmname_list,TexChanPrefix=""):
                 fiducialname=mdname[9:-2]
                 fiducialmdname=mdname[:-2]
                 
-                landmarkx=dgm.GetMetaDatumWIDbl(wfm,"%s_X" % (fiducialmdname),np.NaN)
-                landmarky=dgm.GetMetaDatumWIDbl(wfm,"%s_Y" % (fiducialmdname),np.NaN)
+                landmarkx=dgm.GetMetaDatumWIDbl(wfm,"%s_X" % (fiducialmdname),np.nan)
+                landmarky=dgm.GetMetaDatumWIDbl(wfm,"%s_Y" % (fiducialmdname),np.nan)
                 
                 
                 landmarkdict2d[fiducialname]=(texurl,landmarkx,

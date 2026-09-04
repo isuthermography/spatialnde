@@ -217,8 +217,8 @@ class SurfaceStructuredGridDataSet(object):
                 fiducialname=mdname[9:-2]
                 fiducialmdname=mdname[:-2]
 
-                landmarkx=dgm.GetMetaDatumWIDbl(wfminfo,"%s_X" % (fiducialmdname),np.NaN)
-                landmarky=dgm.GetMetaDatumWIDbl(wfminfo,"%s_Y" % (fiducialmdname),np.NaN)
+                landmarkx=dgm.GetMetaDatumWIDbl(wfminfo,"%s_X" % (fiducialmdname),np.nan)
+                landmarky=dgm.GetMetaDatumWIDbl(wfminfo,"%s_Y" % (fiducialmdname),np.nan)
 
                 # Convert landmark coordinates to pixel coords
                 landmarkx -= IniVal[0]

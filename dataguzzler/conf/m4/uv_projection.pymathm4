@@ -586,7 +586,7 @@
 
     got_both = got_accumulation & got_proj
     
-    paramwfm.data[:,:,:]=np.NaN
+    paramwfm.data[:,:,:]=np.nan
     paramwfm.data[:,:,:].reshape(nx*ny,nt,order='F')[got_accumulation,:] =  accumulation.data.reshape(nx*ny,nt,order='F')[got_accumulation,:]*weightscaling.reshape(nx*ny,1,order='F')[got_accumulation,:]
 
     paramwfm.data.reshape(nx*ny,nt,order='F')[got_proj,:] = uv_proj_stack.data.reshape(nx*ny,nt,order='F')[got_proj,:]*weightscaling_newdata.reshape(nx*ny,1,order='F')[got_proj,:]

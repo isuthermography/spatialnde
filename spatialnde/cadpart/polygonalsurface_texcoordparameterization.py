@@ -551,7 +551,7 @@ class polygonalsurface_texcoordparameterization(object):
         if np.isnan(polysurf.principal_curvatures[polysurf.vertexidx[firstidx:(firstidx+numpoints)],0]).any():
             # abort if we are missing a curvature
             #curvmat[vcnt,ucnt,:,:]=np.NaN
-            return np.array(((np.NaN,np.NaN),(np.NaN,np.NaN)),dtype='d')
+            return np.array(((np.nan,np.nan),(np.nan,np.nan)),dtype='d')
         
         # For this facet, the 3D coords of the vertices are
         coordvals = (polysurf.vertices[polysurf.vertexidx[firstidx:(firstidx+numpoints)],:]-centroid.reshape(1,3)).T # coordvals is the coordinates relative to centroid, 3 x numpoints
@@ -689,7 +689,7 @@ class polygonalsurface_texcoordparameterization(object):
                     pass
                 if polynum is None:
                     # Abort if this pixel is outside all polygons
-                    curvmat[vcnt,ucnt,:,:]=np.NaN
+                    curvmat[vcnt,ucnt,:,:]=np.nan
                     continue
 
                 #if vcnt==50 and ucnt==50:
@@ -829,7 +829,7 @@ class polygonalsurface_texcoordparameterization(object):
                 
                 if polynum is None:
                     # Abort if this pixel is outside all polygons
-                    stepsizemat[vcnt,ucnt,:]=np.NaN
+                    stepsizemat[vcnt,ucnt,:]=np.nan
                     continue
 
                 stepsizemat[vcnt,ucnt,:]=self._evaluate_stepsize(polysurf,polynum,ny,nx)

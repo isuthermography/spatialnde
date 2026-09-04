@@ -286,7 +286,7 @@ module math("modules/wfmmath.so") {
 
       if (accumulation.ndim < 4 or np.prod(accumulation.dimlen) <= 1):
         paramwfm=makeresult(ModData,0,(1,))
-        paramwfm.data[::]=np.NaN
+        paramwfm.data[::]=np.nan
         return paramwfm
 
 
@@ -304,7 +304,7 @@ module math("modules/wfmmath.so") {
 
       if (accumulation.ndim < 4 or np.prod(accumulation.dimlen) <= 1):
         paramwfm=makeresult(ModData,0,(1,))
-        paramwfm.data[::]=np.NaN
+        paramwfm.data[::]=np.nan
         return paramwfm
 
       t0=dgm.GetMetaDatumWIDbl(accumulation,"IniVal4",0.0)

@@ -43,7 +43,7 @@ def evalcurvature(CADsurface,CADu,CADv,finetol,approxoutwardnormal=None):
 
     if not Curvature.IsCurvatureDefined() or not  Curvature.IsTangentUDefined() or not Curvature.IsTangentVDefined():
         # Return all NaN's. 
-        return (np.array((np.NaN,np.NaN)),np.ones((3,2),dtype='d')*np.NaN,np.ones(3)*np.NaN,np.ones(3)*np.NaN,np.ones(3)*np.NaN)
+        return (np.array((np.nan,np.nan)),np.ones((3,2),dtype='d')*np.nan,np.ones(3)*np.nan,np.ones(3)*np.nan,np.ones(3)*np.nan)
 
 
     Sigma_u = Curvature.D1U() # vector 1st derivative along U axis
@@ -336,8 +336,8 @@ def eval_all_curvatures(polygonalsurface,Faces,Surfaces,SurfObjs,coarsetol,finet
             if (vecnorm(normalarray-normalmean) > normaltolerance).any():
                 # Too much change in normal... bail and calculate
                 # curvature numerically
-                curvatures[vertnum,:]=np.NaN
-                curvature_tangent_axes[vertnum,:,:]=np.NaN
+                curvatures[vertnum,:]=np.nan
+                curvature_tangent_axes[vertnum,:,:]=np.nan
                 continue
                 
 
@@ -367,8 +367,8 @@ def eval_all_curvatures(polygonalsurface,Faces,Surfaces,SurfObjs,coarsetol,finet
 
             if (np.abs(curvmats-curvmatmean[np.newaxis,:,:]) > curvaturetolerance).any():
             
-                curvatures[vertnum,:]=np.NaN
-                curvature_tangent_axes[vertnum,:,:]=np.NaN
+                curvatures[vertnum,:]=np.nan
+                curvature_tangent_axes[vertnum,:,:]=np.nan
                 continue
 
             # fix any skewness in curvmatmean
@@ -397,8 +397,8 @@ def eval_all_curvatures(polygonalsurface,Faces,Surfaces,SurfObjs,coarsetol,finet
             normalalign = [ np.inner(np.cross(vert_uvec[cnt],vert_vvec[cnt]),np.cross(curvtangentaxes[:,0],curvtangentaxes[:,1])) >= 0.0 for cnt in range(len(vert_curvatures)) ]
             if not all(normalalign):
             
-                curvatures[vertnum,:]=np.NaN
-                curvature_tangent_axes[vertnum,:,:]=np.NaN
+                curvatures[vertnum,:]=np.nan
+                curvature_tangent_axes[vertnum,:,:]=np.nan
                 continue
                 
             
@@ -412,8 +412,8 @@ def eval_all_curvatures(polygonalsurface,Faces,Surfaces,SurfObjs,coarsetol,finet
             # len(vert_curvatures==0).... Curvature evaluation failed.
             # Leave result blank, possibly trigger numerical calculation of 
             # curvature numerically
-            curvatures[vertnum,:]=np.NaN
-            curvature_tangent_axes[vertnum,:,:]=np.NaN
+            curvatures[vertnum,:]=np.nan
+            curvature_tangent_axes[vertnum,:,:]=np.nan
             pass
 
         pass

@@ -74,14 +74,14 @@ def run(_xmldoc,_element,_uniquematches,_dest_href,dc_specimen_str):
             outwfmdict[giwfm_name].Name=giwfm_name
             outwfmdict[giwfm_name].dimlen=wfmdict[giwfm_name].dimlen
             outwfmdict[giwfm_name].ndim=wfmdict[giwfm_name].dimlen.shape[0]
-            outwfmdict[giwfm_name].data=wfmdict[giwfm_name].data
+            outwfmdict[giwfm_name].data=wfmdict[giwfm_name].data.copy(order="F")
             outwfmdict[giwfm_name].MetaData=copy.deepcopy(wfmdict[giwfm_name].MetaData)
             
             outwfmdict[giwfm_weights_name]=dg.wfminfo()
             outwfmdict[giwfm_weights_name].Name=giwfm_weights_name
             outwfmdict[giwfm_weights_name].dimlen=wfmdict[giwfm_weights_name].dimlen
             outwfmdict[giwfm_weights_name].ndim=wfmdict[giwfm_weights_name].dimlen.shape[0]
-            outwfmdict[giwfm_weights_name].data=wfmdict[giwfm_weights_name].data
+            outwfmdict[giwfm_weights_name].data=wfmdict[giwfm_weights_name].data.copy(order="F")
             outwfmdict[giwfm_weights_name].MetaData=copy.deepcopy(wfmdict[giwfm_weights_name].MetaData)
             firstiter=False
             pass
@@ -129,7 +129,7 @@ def run(_xmldoc,_element,_uniquematches,_dest_href,dc_specimen_str):
 
             got_only_proj = got_proj & (~got_accumulation)
             
-
+            #raise Exception()
             outwfmdict[giwfm_name].data.reshape(nx*ny,nt,order='F')[got_only_proj,:] = wfmdict[giwfm_name].data.reshape(nx*ny,nt,order='F')[got_only_proj,:]*weightscaling_newdata.reshape(nx*ny,1,order='F')[got_only_proj,:]
             
 
